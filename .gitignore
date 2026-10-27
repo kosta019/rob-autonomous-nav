@@ -10,3 +10,4 @@ __pycache__/
 .vscode/
 # Mission Logs de las pruebas (el definitivo de la demo se añade a mano con git add -f)
 mission_log*.csv
+test_gazebo/resultados/

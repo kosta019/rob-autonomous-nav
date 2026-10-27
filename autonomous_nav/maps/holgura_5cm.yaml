@@ -1,0 +1,9 @@
+# GENERADO por scripts/planificar_fase1.py el 2026-10-27 13:33.
+# Holgura estática (m) de cada celda: el mínimo de sus píxeles de 1 cm, con las zonas prohibidas.
+# Celda (i, j): i con X, j con Y. X del borde superior de la celda i = origen_x + i * resolucion.
+resolucion: 0.05
+origen_x: -0.71
+origen_y: -0.02
+filas: 213
+columnas: 357
+zonas_prohibidas: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo"]

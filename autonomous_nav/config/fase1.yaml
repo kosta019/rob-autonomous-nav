@@ -23,8 +23,8 @@ fase1_node:
     # ---------- Control (valores de partida, ajustables) ----------
     control_rate: 10.0           # Hz del timer de control
     tol_waypoint: 0.07           # m, llegada a waypoints intermedios
-    tol_mandatory: 0.05          # m, llegada a E, Door y Q
-    tol_final_yaw: 0.05          # rad (~3 grados)
+    tol_mandatory: 0.02          # m, llegada a E, Door, Q y pose final. El robot para justo al entrar: el error es ~tol (con 0.05 daba 4.8 cm)
+    tol_final_yaw: 0.02          # rad (~1 grado). Igual: el error final es ~tol
     max_linear_speed: 0.15       # m/s (máximo del Burger: 0.22)
     max_angular_speed: 0.8       # rad/s (máximo del Burger: 2.84)
     k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
@@ -56,6 +56,9 @@ fase1_node:
     inflation_radius_min: 0.18   # m, último reintento si no hay camino (paso 3)
     clearance_target: 0.60       # m, a partir de aquí no hay penalización por cercanía
     clearance_cost_gain: 3.0
+    simplify_clearance_cap: 0.45 # m, la simplificación no exige más holgura que esto
+    simplify_margin: 0.02        # m, un atajo puede perder esto respecto al camino de celdas
+    simplify_step: 0.01          # m, muestreo de los segmentos (sobre el mapa de 1 cm)
     planning_sequence: ["A", "B", "D", "E", "Door", "Q"]   # el paso 2 planifica tramo a tramo esta secuencia
 
     # Puntos del enunciado (v2), necesarios para el planificador
