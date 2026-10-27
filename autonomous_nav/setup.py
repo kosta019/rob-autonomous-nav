@@ -15,6 +15,8 @@ setup(
         # Configuración y mapa, para que el nodo los encuentre en share/autonomous_nav/
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'maps'), glob('maps/*.png') + glob('maps/*.npy') + glob('maps/*.yaml')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'worlds'), glob('worlds/*.sdf')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

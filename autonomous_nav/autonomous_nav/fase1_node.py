@@ -13,7 +13,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.signals import SignalHandlerOptions
 from geometry_msgs.msg import TwistStamped
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Imu, LaserScan
 from nav_msgs.msg import Odometry
 
 
@@ -62,6 +62,7 @@ class Fase1Node(Node):
         self.cono = math.radians(self.declare_parameter('stop_half_angle_deg', D).value)
         self.timeout = self.declare_parameter('scan_timeout', D).value
         self.lidar_offset_x = self.declare_parameter('lidar_offset_x', D).value
+        self.usar_imu = self.declare_parameter('use_imu_yaw', Parameter.Type.BOOL).value
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
         self.log_period = self.declare_parameter('log_period', D).value
 
@@ -79,10 +80,15 @@ class Fase1Node(Node):
         self.i_objetivo = 0
         self.estado = 'GIRAR'
 
-        # 3. Últimos mensajes de los sensores y cuándo llegaron (según el reloj del nodo)
-        self.odom = None
-        self.odom0 = None       # primera lectura de /odom: (x0, y0, theta0)
+        # 3. Estimación de la pose (odometría + giróscopo) y cuándo llegó cada sensor (reloj del nodo)
+        self.odom_anterior = None   # última lectura de /odom: (x, y, theta) en el sistema de /odom
+        self.x_rel = 0.0            # pose relativa al arranque: lo que se ha movido desde la salida
+        self.y_rel = 0.0
+        self.th_rel = 0.0
+        self.yaw_imu = 0.0          # giro acumulado según el giróscopo desde la salida
+        self.t_imu_anterior = None  # sello de tiempo del último /imu (para el dt de la integración)
         self.t_odom = None
+        self.t_imu = None
         self.scan = None
         self.t_scan = None
 
@@ -97,6 +103,8 @@ class Fase1Node(Node):
         self.publisher = self.create_publisher(TwistStamped, '/cmd_vel', qos_profile_r)
         self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_b)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile_b)
+        if self.usar_imu:
+            self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)
 
         # 5. Mission Log. Un fichero por ejecución (con la fecha) para no machacar el de otra prueba.
         base, ext = os.path.splitext(log_file)
@@ -110,14 +118,34 @@ class Fase1Node(Node):
         # 6. Bucle de control a ritmo fijo
         self.create_timer(1.0 / control_rate, self.control_loop)
 
-    # ---------- Callbacks: solo guardan el último mensaje ----------
+    # ---------- Callbacks ----------
+    # /scan solo guarda el último mensaje. /odom y /imu además ACUMULAN: integrar no admite saltarse
+    # mensajes, así que la integración (pocas líneas) va aquí y no en el timer.
 
     def odom_callback(self, msg):
-        if self.odom0 is None:
-            p = msg.pose.pose
-            self.odom0 = (p.position.x, p.position.y, yaw_de_cuaternion(p.orientation))
-        self.odom = msg
+        p = msg.pose.pose
+        x, y, th = p.position.x, p.position.y, yaw_de_cuaternion(p.orientation)
+        if self.odom_anterior is not None:
+            xa, ya, tha = self.odom_anterior
+            # Avance (con signo) desde la lectura anterior, en la dirección en que iba según /odom.
+            # De /odom solo nos fiamos de la distancia: el rumbo, si se puede, lo da el giróscopo.
+            ds = (x - xa) * math.cos(tha) + (y - ya) * math.sin(tha)
+            th_antes = self.th_rel
+            self.th_rel = self.yaw_imu if self.usar_imu else self.th_rel + normalizar(th - tha)
+            th_medio = th_antes + 0.5 * normalizar(self.th_rel - th_antes)
+            self.x_rel += ds * math.cos(th_medio)
+            self.y_rel += ds * math.sin(th_medio)
+        self.odom_anterior = (x, y, th)
         self.t_odom = self.get_clock().now()
+
+    def imu_callback(self, msg):
+        # Rumbo integrando la velocidad angular del giróscopo (como hace el driver del TB3 real).
+        # Con el sello de tiempo del propio /imu: el dt entre dos lecturas del mismo reloj.
+        t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self.t_imu_anterior is not None and 0.0 < t - self.t_imu_anterior < 0.5:
+            self.yaw_imu += msg.angular_velocity.z * (t - self.t_imu_anterior)
+        self.t_imu_anterior = t
+        self.t_imu = self.get_clock().now()
 
     def scan_callback(self, msg):
         self.scan = msg
@@ -128,23 +156,14 @@ class Fase1Node(Node):
     def pose_mundo(self):
         # Pose (x, y, theta) del robot en el sistema del enunciado, o None si aún no hay /odom.
         # Es la única función que sabe de dónde sale la pose: con el SLAM solo cambiará esta.
-        if self.odom is None:
+        # (x_rel, y_rel, th_rel) es lo que se ha movido desde la salida, con los ejes del robot al salir.
+        if self.odom_anterior is None:
             return None
-        p = self.odom.pose.pose
-        x0, y0, th0 = self.odom0
-
-        # a) Pose relativa al arranque: el desplazamiento desde la primera lectura, girado -theta0
-        dx = p.position.x - x0
-        dy = p.position.y - y0
-        x_rel = math.cos(th0) * dx + math.sin(th0) * dy
-        y_rel = -math.sin(th0) * dx + math.cos(th0) * dy
-        th_rel = yaw_de_cuaternion(p.orientation) - th0
-
-        # b) Al mundo: girar theta_i y trasladar a (x_i, y_i)
+        # Al mundo: girar theta_i y trasladar a (x_i, y_i)
         xi, yi, thi = self.pose_inicial
-        x = xi + math.cos(thi) * x_rel - math.sin(thi) * y_rel
-        y = yi + math.sin(thi) * x_rel + math.cos(thi) * y_rel
-        return x, y, normalizar(thi + th_rel)
+        x = xi + math.cos(thi) * self.x_rel - math.sin(thi) * self.y_rel
+        y = yi + math.sin(thi) * self.x_rel + math.cos(thi) * self.y_rel
+        return x, y, normalizar(thi + self.th_rel)
 
     # ---------- Seguridad ----------
 
@@ -180,11 +199,12 @@ class Fase1Node(Node):
 
     def control_loop(self):
         # 1. Sin datos frescos de algún sensor: parada total
-        if self.sensor_caducado(self.t_odom) or self.sensor_caducado(self.t_scan):
+        if (self.sensor_caducado(self.t_odom) or self.sensor_caducado(self.t_scan)
+                or (self.usar_imu and self.sensor_caducado(self.t_imu))):
             self.publicar_vel(0.0, 0.0)
             if not self.sin_sensores:
                 self.sin_sensores = True
-                self.get_logger().warn('Sin /odom o /scan recientes: parada total')
+                self.get_logger().warn('Sin /odom, /scan o /imu recientes: parada total')
                 x, y, th = self.pose_mundo()
                 self.escribir_log(x, y, th, 'TIMEOUT_SENSOR')
             return
