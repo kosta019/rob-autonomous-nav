@@ -38,7 +38,7 @@ fase1_node:
     scan_timeout: 0.5            # s sin /scan (o sin /odom): parada total
 
     # ---------- Robot ----------
-    lidar_offset_x: -0.03        # m, posición del LiDAR (base_scan) sobre el eje del robot. APROXIMADO: comprobar en el URDF
+    lidar_offset_x: -0.032       # m, posición del LiDAR (base_scan) sobre el eje del robot. Del URDF turtlebot3_burger (scan_joint)
 
     # ---------- Log ----------
     log_file: "mission_log.csv"
