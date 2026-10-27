@@ -1,13 +1,18 @@
-# Fase I: seguir la lista de waypoints con parada de emergencia y Mission Log.
+# Fase I: seguir la lista de waypoints con parada de emergencia y Mission Log (paso 1), y
+# detectar obstáculos nuevos con el LiDAR y replanificar alrededor de ellos (paso 3).
 # Misma estructura que ref/go_stop.py: una clase Node, publicadores y suscriptores en __init__,
-# callbacks y main(). La diferencia: los callbacks solo guardan el último mensaje y el control
-# va en un timer a ritmo fijo (así se detecta si un sensor deja de llegar).
+# callbacks y main(). La diferencia: el control va en un timer a ritmo fijo (así se detecta
+# si un sensor deja de llegar) y no en los callbacks.
 import csv
 import math
 import os
+import time
 from datetime import datetime
 
+import numpy as np
 import rclpy
+import yaml
+from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -15,6 +20,8 @@ from rclpy.signals import SignalHandlerOptions
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import Imu, LaserScan
 from nav_msgs.msg import Odometry
+
+from autonomous_nav import planificador as pl
 
 
 def normalizar(a):
@@ -66,6 +73,40 @@ class Fase1Node(Node):
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
         self.log_period = self.declare_parameter('log_period', D).value
 
+        # Paso 3: obstáculos nuevos y replanificación
+        self.margen_estatico = self.declare_parameter('obstacle_static_margin', D).value
+        self.margen_plan = self.declare_parameter('obstacle_plan_margin', D).value
+        self.memoria = self.declare_parameter('obstacle_memory_time', D).value
+        self.margen_borrado = self.declare_parameter('obstacle_clear_margin', D).value
+        self.separacion_log = self.declare_parameter('obstacle_log_spacing', D).value
+        self.alcance_obstaculos = self.declare_parameter('obstacle_max_range', D).value
+        self.giro_max_obstaculos = self.declare_parameter('obstacle_max_turn_rate', D).value
+        self.alcance_bloqueo = self.declare_parameter('block_lookahead', D).value
+        self.histeresis = self.declare_parameter('block_hysteresis', D).value
+        self.espera = self.declare_parameter('obstacle_wait_time', D).value
+        self.reintento = self.declare_parameter('replan_retry_period', D).value
+        self.inflado = self.declare_parameter('inflation_radius', D).value
+        self.inflados = [self.inflado, self.declare_parameter('inflation_radius_retry', D).value,
+                         self.declare_parameter('inflation_radius_min', D).value]
+        self.holgura_objetivo = self.declare_parameter('clearance_target', D).value
+        self.ganancia = self.declare_parameter('clearance_cost_gain', D).value
+        self.simp_tope = self.declare_parameter('simplify_clearance_cap', D).value
+        self.simp_margen = self.declare_parameter('simplify_margin', D).value
+        self.simp_paso = self.declare_parameter('simplify_step', D).value
+        # Anclas: puntos de la secuencia (B, D...) por los que hay que pasar aunque no sean obligatorios
+        # (B y D rodean las mesas, que no están en el mapa)
+        self.anclas = self.declare_parameter('planning_sequence', SA).value
+        self.obligatorios = obligatorios
+
+        # Holgura estática de la rejilla de 5 cm (paso 2) y sus metadatos
+        ruta = self.declare_parameter('static_clearance_file', Parameter.Type.STRING).value
+        if not os.path.isabs(ruta):
+            ruta = os.path.join(get_package_share_directory('autonomous_nav'), ruta)
+        self.holgura = np.load(ruta)
+        with open(ruta.replace('.npy', '.yaml')) as f:
+            m = yaml.safe_load(f)
+        self.meta = {'resolucion': m['resolucion'], 'origen_x': m['origen_x'], 'origen_y': m['origen_y']}
+
         # 2. Lista de objetivos: (nombre, x, y, tolerancia). Al final, la posición de la pose final.
         if not (len(nombres) == len(xs) == len(ys)):
             raise ValueError('waypoint_names, waypoints_x y waypoints_y deben tener la misma longitud')
@@ -96,6 +137,13 @@ class Fase1Node(Node):
         self.sin_sensores = True
         self.frenado = False
         self.t_ultimo_log = None
+
+        # Memoria de obstáculos nuevos: celda de 5 cm -> [x, y, última vez que se vio (s)]
+        self.obstaculos = {}
+        self.obstaculos_log = []    # posiciones ya escritas en el Mission Log
+        self.t_espera = None        # cuándo empezó la espera en ESPERAR
+        self.n_replan = 0
+        self.w_anterior = 0.0       # última velocidad angular mandada
 
         # 4. Publicador y suscriptores (QoS como en la plantilla)
         qos_profile_b = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=10)
@@ -195,6 +243,142 @@ class Fase1Node(Node):
         ly = y + self.lidar_offset_x * math.sin(th)
         return lx + r_min * math.cos(th + a_min), ly + r_min * math.sin(th + a_min)
 
+    # ---------- Obstáculos nuevos y replanificación (paso 3) ----------
+
+    def actualizar_obstaculos(self, x, y, th, ahora):
+        # Memoria de obstáculos nuevos (lo que el LiDAR ve y el mapa no explica).
+        # - Se añade cada lectura válida que cae donde la holgura estática es > obstacle_static_margin.
+        # - Se olvida si lleva obstacle_memory_time sin verse, o si ahora un rayo del LiDAR pasa a través
+        #   de él (la persona se ha ido). Así no se olvida al girar y dejar de verlo (eso haría oscilar
+        #   al robot entre el plan nuevo y el original), pero tampoco quedan obstáculos fantasma.
+        # Girando deprisa no se toca la memoria: el scan llega con retraso respecto a la pose y las
+        # paredes aparecerían desplazadas (obstáculos falsos, o borrados falsos).
+        if abs(self.w_anterior) > self.giro_max_obstaculos:
+            return
+        msg = self.scan
+        r = np.array(msg.ranges, dtype=float)
+        n = len(r)
+        a = msg.angle_min + np.arange(n) * msg.angle_increment
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+
+        # a) Lecturas válidas y cercanas en el mundo, y las que no explica el mapa
+        validas = np.isfinite(r) & (r >= msg.range_min) & (r <= min(msg.range_max, self.alcance_obstaculos))
+        px = lx + r[validas] * np.cos(th + a[validas])
+        py = ly + r[validas] * np.sin(th + a[validas])
+        res = self.meta['resolucion']
+        fi = np.floor((px - self.meta['origen_x']) / res).astype(int)
+        co = np.floor((py - self.meta['origen_y']) / res).astype(int)
+        dentro = (fi >= 0) & (fi < self.holgura.shape[0]) & (co >= 0) & (co < self.holgura.shape[1])
+        nuevo = np.zeros(len(px), dtype=bool)
+        nuevo[dentro] = self.holgura[fi[dentro], co[dentro]] > self.margen_estatico
+        for ox, oy, i, j in zip(px[nuevo], py[nuevo], fi[nuevo], co[nuevo]):
+            if (i, j) not in self.obstaculos and all(
+                    math.hypot(ox - qx, oy - qy) > self.separacion_log for qx, qy in self.obstaculos_log):
+                self.obstaculos_log.append((ox, oy))
+                self.escribir_log(x, y, th, 'OBSTACULO', None, ox, oy)
+            self.obstaculos[(i, j)] = [ox, oy, ahora]
+
+        # b) Olvidar: por tiempo, o porque los rayos que apuntan a él (y sus vecinos) llegan más lejos.
+        #    inf = el rayo no ha chocado con nada en todo su alcance: también es "libre".
+        for celda, (ox, oy, t) in list(self.obstaculos.items()):
+            if ahora - t > self.memoria:
+                del self.obstaculos[celda]
+                continue
+            d = math.hypot(ox - lx, oy - ly)
+            if not (msg.range_min < d < msg.range_max):
+                continue
+            k = int(round(((math.atan2(oy - ly, ox - lx) - th - msg.angle_min) % (2 * math.pi)) / msg.angle_increment))
+            rayos = [r[(k + dk) % n] for dk in (-1, 0, 1)]
+            if all(ri == math.inf or (math.isfinite(ri) and ri > d + self.margen_borrado) for ri in rayos):
+                del self.obstaculos[celda]
+
+    def ruta_bloqueada(self, x, y, extra=0.0):
+        # Obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m).
+        # 'extra' agranda las dos distancias: en ESPERAR, para dar la ruta por libre se pide ese margen
+        # de más (histéresis; sin ella, un obstáculo justo en el límite hace parpadear bloqueo/libre).
+        # Devuelve su posición, o None si la ruta está libre.
+        if not self.obstaculos:
+            return None
+        puntos = [(x, y)] + [(o[1], o[2]) for o in self.objetivos[self.i_objetivo:]]
+        muestras = []
+        restante = self.alcance_bloqueo + extra
+        for (ax, ay), (bx, by) in zip(puntos, puntos[1:]):
+            largo = math.hypot(bx - ax, by - ay)
+            if largo == 0.0:
+                continue
+            usado = min(largo, restante)
+            t = np.linspace(0.0, usado / largo, int(math.ceil(usado / 0.05)) + 1)
+            muestras.append(np.column_stack([ax + t * (bx - ax), ay + t * (by - ay)]))
+            restante -= usado
+            if restante <= 0.0:
+                break
+        if not muestras:
+            return None
+        s = np.vstack(muestras)
+        o = np.array([(v[0], v[1]) for v in self.obstaculos.values()])
+        d = np.hypot(s[:, None, 0] - o[None, :, 0], s[:, None, 1] - o[None, :, 1]).min(axis=0)
+        k = int(np.argmin(d))
+        return (o[k, 0], o[k, 1]) if d[k] < self.inflado + extra else None
+
+    def esperar(self, x, y, th, ahora):
+        # Estado ESPERAR (robot parado). Si la ruta se libera, se sigue con el plan que había.
+        # Si a los obstacle_wait_time s sigue bloqueada, se replanifica (con el robot parado).
+        if self.ruta_bloqueada(x, y, self.histeresis) is None:
+            self.get_logger().info('Ruta libre: sigo con el plan')
+            self.estado = 'GIRAR'
+            self.escribir_log(x, y, th, 'RUTA_LIBRE')
+            return
+        if ahora - self.t_espera < self.espera:
+            return
+        inflado, segundos = self.replanificar(x, y)
+        if inflado is None:
+            self.get_logger().warn(f'Sin camino ({segundos:.2f} s): reintento en {self.reintento:.0f} s')
+            self.escribir_log(x, y, th, 'SIN_CAMINO', segundos)
+            self.t_espera = ahora - self.espera + self.reintento   # el próximo intento, dentro de replan_retry_period
+            return
+        self.get_logger().info(f'Replanificado con inflado {inflado:.2f} m en {segundos:.2f} s: '
+                               f'{[o[0] for o in self.objetivos[self.i_objetivo:]]}')
+        self.escribir_log(x, y, th, f'REPLANIFICACION inflado={inflado:.2f}', segundos)
+        self.estado = 'GIRAR'
+
+    def replanificar(self, x, y):
+        # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
+        # anclas que queden por el camino; después sigue la lista original.
+        # Devuelve (inflado usado, segundos), o (None, segundos) si no hay camino ni con el inflado mínimo.
+        t0 = time.perf_counter()
+        resto = self.objetivos[self.i_objetivo:]
+        k = next(k for k, o in enumerate(resto) if o[0] in self.obligatorios or o[0] == 'final')
+        anclas = [o for o in resto[:k] if o[0] in self.anclas] + [resto[k]]
+        despues = resto[k + 1:]
+        obst = [(v[0], v[1]) for v in self.obstaculos.values()]
+        holgura = pl.holgura_con_obstaculos(self.holgura, self.meta, obst, self.margen_plan, self.holgura_objetivo)
+        self.n_replan += 1
+
+        for inflado in self.inflados:
+            # Un punto obligatorio tapado por un obstáculo no se puede saltar: no hay camino (se espera).
+            # Un ancla no obligatoria tapada se salta.
+            if pl.holgura_en(holgura, self.meta, anclas[-1][1], anclas[-1][2]) <= inflado:
+                continue
+            lista = [o for o in anclas[:-1] if pl.holgura_en(holgura, self.meta, o[1], o[2]) > inflado] + [anclas[-1]]
+            coste = pl.mapa_de_costes(holgura, inflado, self.holgura_objetivo, self.ganancia)
+            nuevos = []
+            p = (x, y)
+            for nombre, ox, oy, tol in lista:
+                celdas = pl.planificar_tramo(coste, self.meta, p, (ox, oy))
+                if celdas is None:
+                    nuevos = None
+                    break
+                puntos = pl.simplificar(celdas, holgura, self.meta, self.simp_paso, self.simp_tope, self.simp_margen)
+                for m, (ix, iy) in enumerate(puntos[1:-1], start=1):
+                    nuevos.append((f'replan{self.n_replan}_{m}', ix, iy, self.tol_waypoint))
+                nuevos.append((nombre, ox, oy, tol))
+                p = (ox, oy)
+            if nuevos is not None:
+                self.objetivos = self.objetivos[:self.i_objetivo] + nuevos + despues
+                return inflado, time.perf_counter() - t0
+        return None, time.perf_counter() - t0
+
     # ---------- Control ----------
 
     def control_loop(self):
@@ -214,10 +398,25 @@ class Fase1Node(Node):
             self.get_logger().info('Sensores OK')
             self.escribir_log(x, y, th, 'SENSORES_OK')
 
-        # 2. Lo que querría hacer la máquina de estados
-        v, w = self.maquina_estados(x, y, th)
+        # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
+        ahora_s = self.get_clock().now().nanoseconds * 1e-9
+        self.actualizar_obstaculos(x, y, th, ahora_s)
+        if self.estado in ('GIRAR', 'AVANZAR'):
+            bloqueo = self.ruta_bloqueada(x, y)
+            if bloqueo is not None:
+                self.get_logger().warn(f'Ruta bloqueada por un obstáculo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}): espero')
+                self.estado = 'ESPERAR'
+                self.t_espera = ahora_s
+                self.escribir_log(x, y, th, 'BLOQUEO', None, bloqueo[0], bloqueo[1])
 
-        # 3. Parada de emergencia, por encima de cualquier estado. Solo anula la lineal:
+        # 3. Lo que querría hacer la máquina de estados
+        if self.estado == 'ESPERAR':
+            v, w = 0.0, 0.0
+            self.esperar(x, y, th, ahora_s)
+        else:
+            v, w = self.maquina_estados(x, y, th)
+
+        # 4. Parada de emergencia, por encima de cualquier estado (y del planificador). Solo anula la lineal:
         #    si también bloqueara el giro, mirando a una pared cercana nunca podría girarse para salir.
         obstaculo = self.obstaculo_delante(x, y, th) if v > 0.0 else None
         if obstaculo is not None:
@@ -232,8 +431,9 @@ class Fase1Node(Node):
             self.escribir_log(x, y, th, 'FIN_PARADA')
 
         self.publicar_vel(v, w)
+        self.w_anterior = w
 
-        # 4. Fila periódica del log
+        # 5. Fila periódica del log
         ahora = self.get_clock().now()
         if self.t_ultimo_log is None or (ahora - self.t_ultimo_log).nanoseconds * 1e-9 >= self.log_period:
             self.t_ultimo_log = ahora

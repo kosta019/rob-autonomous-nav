@@ -5,7 +5,8 @@
 #   - Los .yaml se pasan después de config/fase1.yaml y lo sobrescriben (p. ej. config/test_1a.yaml).
 #     Rutas relativas a autonomous_nav/, o absolutas.
 #   - MUNDO=lab: mundo del laboratorio (worlds/laboratorio.sdf, robot en initial_pose). Si no, empty_world.
-#   - CAJAS="x y t; x y t": cajas de 20 cm en (x, y) de Gazebo; cada una se quita a los t s (t = 0: nunca).
+#   - CAJAS="x y t; x y t": cajas de 20 cm en (x, y) de Gazebo; cada una se quita a los t s (t = 0: nunca;
+#     t = B: 1 s después del primer BLOQUEO del Mission Log).
 #   - A los <segundos> el nodo recibe SIGINT (como un Ctrl+C); final.txt dice si el robot queda quieto.
 # Resultados en test_gazebo/resultados/<nombre>/: Mission Log, node.log, final.txt y,
 # en el mundo del laboratorio, real.csv (pose REAL de Gazebo, en coordenadas del enunciado).
@@ -23,6 +24,17 @@ source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
 export TURTLEBOT3_MODEL=burger
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}   # aislado de otros robots de la red
+
+limpiar() {
+    # Cierra la simulación. A veces gz sim no atiende a SIGTERM: si sigue vivo a los 3 s, SIGKILL.
+    # (Un Gazebo que se queda vivo bloquea el siguiente: el nuevo nunca publica /clock.)
+    for s in TERM KILL; do
+        pkill -$s -f "gz sim"; pkill -$s -f parameter_bridge; pkill -$s -f robot_state_publisher
+        pkill -$s -f "ros2 launch"; pkill -$s -f "lib/autonomous_nav/fase1_node"
+        sleep 3
+    done
+}
+limpiar 2> /dev/null   # por si quedó algo de una prueba anterior
 
 OUT=$DIR/resultados/$NOMBRE; rm -rf $OUT; mkdir -p $OUT; cd $OUT
 if [ "${MUNDO:-}" = "lab" ]; then
@@ -44,7 +56,13 @@ for c in "${LISTA[@]}"; do
     k=$((k+1))
     ros2 run ros_gz_sim create -world $MUNDO_GZ -string "${SDF/NOMBRE/caja$k}" -name caja$k -x $CX -y $CY -z 0.25 >> cajas.log 2>&1
     echo "caja$k en ($CX, $CY)" >> cajas.log
-    if [ "${CT:-0}" != "0" ]; then
+    if [ "${CT:-0}" = "B" ]; then
+        # Quitarla 1 s después del primer BLOQUEO del Mission Log (prueba 3b: durante la espera)
+        ( until grep -qs ",BLOQUEO," mission_log_*.csv; do sleep 0.2; done; sleep 1
+          gz service -s /world/$MUNDO_GZ/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean \
+              --timeout 3000 --req "name: \"caja$k\" type: MODEL" > /dev/null 2>&1
+          echo "caja$k quitada 1 s después del bloqueo" >> cajas.log ) &
+    elif [ "${CT:-0}" != "0" ]; then
         ( sleep $CT
           gz service -s /world/$MUNDO_GZ/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean \
               --timeout 3000 --req "name: \"caja$k\" type: MODEL" > /dev/null 2>&1
@@ -74,6 +92,6 @@ sleep 2
     timeout 10 ros2 topic echo /odom --once --qos-reliability best_effort --field twist.twist.linear
 } > final.txt 2>&1
 
-pkill -f "gz sim"; pkill -f parameter_bridge; pkill -f robot_state_publisher; pkill -f "ros2 launch"
+limpiar 2> /dev/null
 cat final.txt
 grep -v "Mission Log" node.log | cut -d']' -f3-

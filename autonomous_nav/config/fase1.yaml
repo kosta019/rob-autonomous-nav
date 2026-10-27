@@ -37,6 +37,23 @@ fase1_node:
     stop_half_angle_deg: 30.0    # semiancho del cono frontal
     scan_timeout: 0.5            # s sin /scan (o sin /odom): parada total
 
+    # ---------- Obstáculos nuevos y replanificación (paso 3) ----------
+    static_clearance_file: "maps/holgura_5cm.npy"   # relativo a share/autonomous_nav; lo genera el paso 2 (+ .yaml)
+    obstacle_static_margin: 0.20 # m: una lectura es obstáculo NUEVO si la holgura estática allí es mayor (la deriva desplaza
+                                 #   las paredes; con 0.15 salían paredes desplazadas 16 cm como obstáculos en el vestíbulo)
+    obstacle_plan_margin: 0.10   # m: al replanificar, los obstáculos nuevos cuentan como si fueran esto más grandes
+    obstacle_memory_time: 30.0   # s sin volver a ver un obstáculo para olvidarlo
+    obstacle_clear_margin: 0.10  # m: se olvida antes si un rayo del LiDAR pasa esto más allá de él (se ha ido)
+    obstacle_log_spacing: 0.20   # m: un obstáculo va al Mission Log si está a esto de los ya registrados
+    obstacle_max_range: 2.5      # m: más lejos, un error pequeño de rumbo ya desplaza mucho la lectura
+    obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria (el scan llega con retraso
+                                 #   y las paredes aparecen desplazadas: con 0.8 rad/s se veían obstáculos falsos)
+    block_lookahead: 1.5         # m de ruta por delante en los que se busca bloqueo (a menos de inflation_radius)
+    block_hysteresis: 0.10       # m: para dar la ruta por LIBRE se pide esto de más (en distancia y en alcance)
+    obstacle_wait_time: 3.0      # s parado antes de replanificar (por si es una persona que pasa)
+    replan_retry_period: 5.0     # s entre reintentos si no hay camino
+    inflation_radius_retry: 0.20 # m, segundo intento si no hay camino; el tercero es inflation_radius_min
+
     # ---------- Robot ----------
     lidar_offset_x: -0.032       # m, posición del LiDAR (base_scan) sobre el eje del robot. Del URDF turtlebot3_burger (scan_joint)
     use_imu_yaw: true            # rumbo integrando el giróscopo de /imu (como el driver del TB3 real). false: rumbo de /odom

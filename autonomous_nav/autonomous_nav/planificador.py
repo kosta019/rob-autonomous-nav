@@ -37,6 +37,26 @@ def holgura_por_bloques(holgura_fina, factor):
     return relleno.reshape(F // factor, factor, C // factor, factor).min(axis=(1, 3))
 
 
+def holgura_con_obstaculos(holgura, meta, puntos, margen, alcance):
+    # Holgura estática + obstáculos nuevos (puntos (x, y) del LiDAR que no están en el mapa).
+    # Cada punto cuenta como un obstáculo 'margen' metros más grande. Solo se recalculan las celdas
+    # a menos de 'alcance' de cada punto: más lejos, el obstáculo ya no cambia el coste.
+    h = holgura.copy()
+    res = meta['resolucion']
+    r = int(math.ceil((alcance + margen) / res))
+    for x, y in puntos:
+        i, j = mundo_a_celda(x, y, meta)
+        i0, i1 = max(0, i - r), min(h.shape[0], i + r + 1)
+        j0, j1 = max(0, j - r), min(h.shape[1], j + r + 1)
+        if i0 >= i1 or j0 >= j1:
+            continue
+        cx = meta['origen_x'] + (np.arange(i0, i1) + 0.5) * res      # centros de las celdas de la ventana
+        cy = meta['origen_y'] + (np.arange(j0, j1) + 0.5) * res
+        d = np.hypot(cx[:, None] - x, cy[None, :] - y) - margen
+        h[i0:i1, j0:j1] = np.minimum(h[i0:i1, j0:j1], np.maximum(d, 0.0))
+    return h
+
+
 def mapa_de_costes(holgura, inflado, holgura_objetivo, ganancia):
     # Coste de pisar cada celda: 1 lejos de los obstáculos, hasta 1 + ganancia pegado al borde inflado,
     # e infinito dentro del inflado. Así el camino se aleja de las paredes cuando hay sitio.

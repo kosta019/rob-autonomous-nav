@@ -50,7 +50,11 @@ def main():
     # Cajas
     log_cajas = os.path.join(res_dir, 'cajas.log')
     if os.path.exists(log_cajas):
-        for m in re.finditer(r'(caja\d+) en \(([-\d.]+), ([-\d.]+)\)', open(log_cajas).read()):
+        texto = open(log_cajas).read()
+        for m in re.finditer(r'(caja\d+) en \(([-\d.]+), ([-\d.]+)\)', texto):
+            if f'{m.group(1)} quitada' in texto:
+                print(f'{m.group(1)}: se quitó durante la prueba (no se comprueba el choque)')
+                continue
             cx, cy = float(m.group(2)), float(m.group(3))
             dx = np.maximum(np.abs(xs - cx) - LADO_CAJA / 2, 0)
             dy = np.maximum(np.abs(ys - cy) - LADO_CAJA / 2, 0)

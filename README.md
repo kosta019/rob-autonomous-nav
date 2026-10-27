@@ -42,12 +42,32 @@ python3 autonomous_nav/scripts/planificar_fase1.py          # genera config/fase
 python3 -m pytest autonomous_nav/test/test_planificador.py  # compara con los valores de referencia de TAREA_FASE1.md
 ```
 
+## Mundo de Gazebo del laboratorio
+
+Generado desde el mapa (`python3 autonomous_nav/scripts/generar_mundo_lab.py` -> `worlds/laboratorio.sdf`).
+El origen de Gazebo es el del enunciado: la pose real del robot sale en coordenadas del enunciado.
+
+```bash
+ros2 launch autonomous_nav laboratorio.launch.py            # robot en initial_pose de fase1.yaml (gui:=false sin ventana)
+ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml \
+    --params-file $CFG/fase1_ruta.yaml -p use_sim_time:=true
+```
+
 ## Pruebas en Gazebo sin ventana
 
 ```bash
 test_gazebo/prueba.sh p1a 100 config/test_1a.yaml                      # cuadrado de 1 m
 CAJA="1.0 0.0 30" test_gazebo/prueba.sh p1c 100 config/test_1a.yaml    # caja delante, se quita a los 30 s
 test_gazebo/prueba.sh ruta 300 config/fase1_ruta.yaml                  # ruta completa de la fase I
+
+# En el mundo del laboratorio (MUNDO=lab), con la pose real y su análisis:
+MUNDO=lab test_gazebo/prueba.sh lab_ruta 260 config/fase1_ruta.yaml
+MUNDO=lab CAJAS="5.18 4.32 0" test_gazebo/prueba.sh p3a 320 config/fase1_ruta.yaml               # 3a: caja en D->E
+MUNDO=lab CAJAS="5.18 4.32 B" test_gazebo/prueba.sh p3b 320 config/fase1_ruta.yaml               # 3b: se quita durante la espera
+MUNDO=lab CAJAS="4.9 4.32 0; 5.5 4.32 0" test_gazebo/prueba.sh p3c 340 config/fase1_ruta.yaml    # 3c: paso estrecho
+MUNDO=lab CAJAS="6.36 11.65 150" test_gazebo/prueba.sh p3d 380 config/fase1_ruta.yaml            # sin camino: caja en la puerta
+python3 test_gazebo/analizar.py test_gazebo/resultados/p3a config/fase1_ruta.yaml                # choques, zonas, precisión real
 ```
 
-Resultados en `test_gazebo/resultados/<nombre>/` (Mission Log, `node.log`, pose final en Gazebo).
+Dentro del toolbox las variables se pasan con `env`: `toolbox run -c ros-jazzy env MUNDO=lab bash test_gazebo/prueba.sh ...`.
+Resultados en `test_gazebo/resultados/<nombre>/` (Mission Log, `node.log`, `final.txt`, `real.csv`).
