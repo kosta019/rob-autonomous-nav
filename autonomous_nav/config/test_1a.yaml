@@ -1,0 +1,10 @@
+# Prueba 1a (y 1c) en Gazebo, empty_world: cuadrado de 1 m.
+# Se pasa DESPUÉS de fase1.yaml y sobrescribe solo estos valores.
+fase1_node:
+  ros__parameters:
+    initial_pose: [0.0, 0.0, 0.0]
+    final_pose:   [0.0, 0.0, 0.0]
+    waypoint_names: ["p1", "p2", "p3", "p4"]
+    waypoints_x:    [1.0, 1.0, 0.0, 0.0]
+    waypoints_y:    [0.0, 1.0, 1.0, 0.0]
+    mandatory_waypoints: ["p1", "p2", "p3", "p4"]   # todos con la tolerancia estricta (tol_mandatory)

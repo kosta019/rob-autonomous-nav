@@ -1,0 +1,12 @@
+# colcon
+build/
+install/
+log/
+# Python
+__pycache__/
+*.pyc
+# IDE
+.idea/
+.vscode/
+# Mission Logs de las pruebas (el definitivo de la demo se añade a mano con git add -f)
+mission_log*.csv

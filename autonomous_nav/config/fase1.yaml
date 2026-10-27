@@ -1,0 +1,73 @@
+# Parámetros de la fase I (fase1_node). Coordenadas en metros, en el sistema del enunciado (ver CLAUDE.md).
+# Formato de parámetros de ROS 2:
+#   - no admite listas anidadas, así que los puntos y los rectángulos van en arrays paralelos;
+#   - en los arrays de reales, todos los números llevan decimal (0.0, no 0), o ROS dará un error de tipo.
+# El script offline del paso 2 lee este mismo fichero con PyYAML: yaml.safe_load(f)["fase1_node"]["ros__parameters"].
+
+fase1_node:
+  ros__parameters:
+
+    # ---------- Poses (las asigna el profesor en la demo) ----------
+    initial_pose: [0.700, 0.920, 0.0]      # [x, y, theta(rad)]. PROVISIONAL: punto A mirando a +X
+    final_pose:   [8.970, 14.497, 0.0]     # [x, y, theta(rad)]. PROVISIONAL: Q. La pose real está en la zona 2
+
+    # ---------- Ruta (salida desde A) ----------
+    # Calculada con el Distance Transform con costes sobre maps/mapa_1cm.png (inflado 0.25 m).
+    # No empieza en A porque A es la salida. Desde B: quitar "B". Desde D: quitar "B" y "D".
+    # Desde C: PENDIENTE (faltan las mesas). El paso 2 genera config/fase1_ruta.yaml, que sobrescribe estos tres arrays.
+    waypoint_names: ["B", "D", "E", "pre_door", "Door", "post_door_1", "post_door_2", "Q"]
+    waypoints_x:    [3.102, 5.285, 5.082, 5.960, 6.490, 7.420, 7.960, 8.970]
+    waypoints_y:    [1.722, 2.517, 6.122, 11.660, 11.682, 12.360, 14.160, 14.497]
+    mandatory_waypoints: ["E", "Door", "Q"]   # en este orden; su precisión se evalúa
+
+    # ---------- Control (valores de partida, ajustables) ----------
+    control_rate: 10.0           # Hz del timer de control
+    tol_waypoint: 0.07           # m, llegada a waypoints intermedios
+    tol_mandatory: 0.05          # m, llegada a E, Door y Q
+    tol_final_yaw: 0.05          # rad (~3 grados)
+    max_linear_speed: 0.15       # m/s (máximo del Burger: 0.22)
+    max_angular_speed: 0.8       # rad/s (máximo del Burger: 2.84)
+    k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
+    k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
+    turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar
+    reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, volver a GIRAR
+
+    # ---------- Seguridad ----------
+    stop_distance: 0.30          # m, medida desde el LiDAR, en el cono frontal
+    stop_half_angle_deg: 30.0    # semiancho del cono frontal
+    scan_timeout: 0.5            # s sin /scan (o sin /odom): parada total
+
+    # ---------- Robot ----------
+    lidar_offset_x: -0.03        # m, posición del LiDAR (base_scan) sobre el eje del robot. APROXIMADO: comprobar en el URDF
+
+    # ---------- Log ----------
+    log_file: "mission_log.csv"
+    log_period: 0.5              # s entre filas periódicas
+
+    # ---------- Mapa y planificador (pasos 2 y 3) ----------
+    map_image: "maps/mapa_1cm.png"
+    map_resolution: 0.01         # m/píxel (deducido de las cotas de la figura)
+    map_origin_row: 71.0         # borde de píxel donde X = 0: fila = floor(100*X + 71)
+    map_origin_col: 2.0          # borde de píxel donde Y = 0: col = floor(100*Y + 2)
+    map_remove_rows: [502]       # motas sueltas que hay que borrar
+    map_remove_cols: [1217]
+    grid_cell: 0.05              # m, rejilla del planificador
+    inflation_radius: 0.25       # m. NUNCA más de 0.30: con 0.33 la puerta se cierra
+    inflation_radius_min: 0.18   # m, último reintento si no hay camino (paso 3)
+    clearance_target: 0.60       # m, a partir de aquí no hay penalización por cercanía
+    clearance_cost_gain: 3.0
+    planning_sequence: ["A", "B", "D", "E", "Door", "Q"]   # el paso 2 planifica tramo a tramo esta secuencia
+
+    # Puntos del enunciado (v2), necesarios para el planificador
+    point_names: ["A", "B", "C", "D", "E", "F", "G", "Door", "Q", "R", "S", "T", "Base"]
+    point_x:     [0.700, 3.102, 2.078, 5.285, 5.082, 5.679, 5.482, 6.490, 8.970, 7.500, 3.540, 2.136, 3.340]
+    point_y:     [0.920, 1.722, 2.517, 2.517, 6.122, 8.528, 10.930, 11.682, 14.497, 16.170, 14.497, 15.300, 15.700]
+
+    # Zonas prohibidas que no están en el mapa (rectángulos en coordenadas del mundo)
+    # ESTIMADAS desde la figura del enunciado: hay que medirlas en el laboratorio.
+    # TODO: añadir las mesas entre B y C (zona 1) cuando estén medidas.
+    nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo"]
+    nogo_x_min: [8.05, -0.55]
+    nogo_x_max: [8.72, 4.59]
+    nogo_y_min: [11.79, 15.85]
+    nogo_y_max: [12.95, 16.90]

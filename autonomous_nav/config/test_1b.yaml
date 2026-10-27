@@ -1,0 +1,12 @@
+# Prueba 1b en Gazebo, empty_world: comprobar la transformación odom -> mundo.
+# El robot "cree" estar en (1, 2) mirando a +Y. El punto (2, 2) está 1 m en +X del mundo,
+# es decir, a su DERECHA: tiene que girar 90° a la derecha y avanzar 1 m.
+# En Gazebo debe terminar en (0, -1). Si gira a la izquierda, hay un error de signo.
+fase1_node:
+  ros__parameters:
+    initial_pose: [1.0, 2.0, 1.5708]
+    final_pose:   [2.0, 2.0, 0.0]      # theta_f = 0: acaba mirando a +X del mundo, sin giro extra
+    waypoint_names: ["p1"]
+    waypoints_x:    [2.0]
+    waypoints_y:    [2.0]
+    mandatory_waypoints: ["p1"]
