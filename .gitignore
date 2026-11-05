@@ -12,3 +12,4 @@ __pycache__/
 mission_log*.csv
 test_gazebo/resultados/
 bags/
+.pytest_cache/

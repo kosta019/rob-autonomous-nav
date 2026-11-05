@@ -1,6 +1,0 @@
-{
-  "test/test_reloc.py::test_ignora_la_hoja_de_la_puerta_abierta": true,
-  "test/test_reloc.py::test_hoja_en_el_lado_cercano_tapa_el_borde": true,
-  "test/test_reloc.py::test_hoja_abierta_hacia_el_vestibulo": true,
-  "test/test_reloc.py::test_ruido_de_4_cm": true
-}
