@@ -1,0 +1,5 @@
+# Generado por comprobar_pose el 2026-11-05 13:50.
+# Pásalo como ÚLTIMO --params-file para que sobrescriba initial_pose.
+fase1_node:
+  ros__parameters:
+    initial_pose: [0.7070, 0.9043, 0.00128]
