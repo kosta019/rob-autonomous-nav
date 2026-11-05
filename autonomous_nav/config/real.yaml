@@ -5,7 +5,10 @@
 fase1_node:
   ros__parameters:
     use_sim_time: false
-    max_linear_speed: 0.12       # 0.08 hasta el 05/11. Siguiente paso: 0.15 (el de Gazebo) si la ruta sale bien a 0.12
+    # 05/11: a 0.12 m/s el rumbo derivaba 3-5° en la ruta (crece en marcha y salta en los giros; parado, no).
+    #   A 0.08 m/s las A->B salieron con < 0.5°. Configuración candidata para la demo.
+    max_linear_speed: 0.08
+    max_angular_speed: 0.4       # 0.8 en fase1.yaml. k_angular (1.5) no cambia: solo satura los giros de más de ~15°
     tol_mandatory: 0.02          # con 0.03 se paraba ~2.7 cm antes de B. Si da vueltas cerca de un punto, volver a 0.03
     tol_final_yaw: 0.03
     # Red de seguridad (05/11): en la ruta completa una persona cruzó a 1 m de E y el robot no la olvidó en 60 s

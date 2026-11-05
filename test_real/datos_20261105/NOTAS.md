@@ -202,3 +202,61 @@ pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
   ahora a 0.44-0.65 m del obstáculo, fuera de los 0.35 del planificador). Obligatorio tapado: tras 5 s sin camino, va
   al punto libre más cercano a menos de 0.40 m (punto_sustituto) y al llegar escribe OBLIGATORIO_TAPADO; nunca Door.
   Con el caso de la ruta 4 (sin robot): E~ en (5.065, 6.205), a 8.5 cm de E y 0.38 m del objeto.
+
+## Rutas completas nº 5 y nº 6 (0.12 m/s): deriva de rumbo — `mission_log_ruta_completa_5.csv`, `..._6.csv`
+- Ruta 5 (17:19): E bien (1.9 cm según el robot); en las maniobras de E el rumbo saltó a +4.4°/+4.8° y se quedó;
+  parada delante de la puerta con el robot realmente en ~(5.90, 10.95) creyéndose en (5.34, 11.35): +0.56 m en X,
+  -0.40 m en Y (foto del usuario). El "obstáculo" era la pared real. Sin relocalización (un replan quitó E-Door_2 y
+  el robot se bloqueó antes del último punto antes de Door; con 0.56 m / 4.5° se habría rechazado igualmente).
+  /cmd_vel: solo fase1_node, v <= 0.12 (`cmd_vel_bag.py`); el twist de /odom marca 0.20 pero no es fiable.
+- Ruta 6 (17:27): error medido con las paredes (`error_en_ruta.py`): A->B rumbo 0 -> +1.5° (Y -7 cm en B); B->D
+  +2 -> +3° (Y -17 cm en D, foto: ~18-30 cm de la cruz); giro en D: +4.6/+6.6°; D->E +3 a +5° (X +16 cm).
+  OBLIGATORIO_TAPADO E 0.158 funcionó. Al final, con la pose muy mal, replanificaciones absurdas (hacia atrás).
+- yaw_odom - yaw_imu: +0.6° en D, +1.5/+2° al final: el giróscopo integrado en el PC deriva casi igual.
+  Parado: 0.004°/10 s. Hipótesis: en marcha a 0.12 m/s (vibraciones) se desplaza el cero del giróscopo; los giros
+  añaden error. A 0.08 m/s las A->B salieron con < 0.5°.
+- Decisión: real.yaml max_linear_speed 0.08 y max_angular_speed 0.4 (k_angular 1.5 sin cambios: solo satura los
+  giros de más de ~15°). Medir con el bag el error de rumbo en una ruta completa, sobre todo en los giros de D y E.
+
+## DISEÑO para implementar (Claudio): "corrección con paredes en cada parada"
+Objetivo: que el error de rumbo y de posición no se acumule a lo largo de la ruta, corrigiéndolo con una pared conocida
+en paradas intermedias (como la relocalización de la puerta, pero en B, D y E). Activable con un parámetro.
+
+1. Cuándo: al llegar a los waypoints de `wall_corr_waypoints` (["B", "D", "E"]), el robot SE PARA (aunque el giro
+   hacia el siguiente punto sea pequeño: en B es de ~1.5° y hoy no para) y pasa a un estado CORR (como RELOC): junta
+   `wall_corr_scans` (10) scans nuevos (uno por scan, no por ciclo del timer) y hace la mediana.
+2. Qué pared: una por parada, en el yaml (listas paralelas con los waypoints, sin coordenadas en el código):
+   - `wall_corr_axis`:  ["Y", "X", "X"]   (Y = pared y = c, dirección X; X = pared x = c, dirección Y)
+   - `wall_corr_c`:     [0.04, 5.86, 5.86] (CALIBRAR: la cara que ve el LiDAR; ver 5)
+   - `wall_corr_from` / `wall_corr_to`: tramo de pared que se usa (a lo largo de ella) para no mezclar otras cosas:
+     B: X 0.3-3.8 · D: Y 1.0-5.5 · E: Y 2.9-5.4 (detrás de E: delante la tapan la mesa pequeña y los tubos).
+   Geometría esperada (mapa, 1 rayo por grado, hasta 3.5 m):
+   | Parada | Pared | Distancia perpendicular | Rayos | Tramo visible |
+   |---|---|---|---|---|
+   | B (3.102, 1.722) | izquierda, y = 0.04 (canaleta) | 1.68 m | ~86 | X 0.23-3.87 (3.6 m) |
+   | D (5.285, 2.517) | frente de los bancos, x = 5.86 | 0.58 m | ~149 | Y 1.01-5.94 (4.9 m) |
+   | E (5.082, 6.122) | frente de los bancos, x = 5.86 | 0.78 m | ~118 en el mapa; real: solo Y < ~5.5 | Y 2.9-5.4 útil |
+   Alternativa en E si sale mal: E-Door_1 (5.115, 7.005) con la pared de la sala x = 6.35 (1.23 m, Y 7.5-9.75).
+   Ojo en B: en las rutas se vieron objetos junto a la pared izquierda (y ~0.25: sillas, mochilas); el ajuste por
+   consenso los deja fuera si no están alineados con la pared.
+3. Ajuste (reutilizar el de ajuste_puerta, generalizado a un eje): pasar los puntos al mundo con la pose creída,
+   quedarse con los de la banda |perp - c| < `wall_corr_band` (0.35) dentro del tramo; recta de partida = la de más
+   puntos a < 2 cm entre las que pasan por dos puntos (mejor_recta); de ella, el tramo continuo más largo
+   (tramo_mas_largo); ajuste final. Para paredes "Y" basta con intercambiar x e y antes de ajustar.
+   - dθ = ángulo de la recta respecto a su dirección teórica (X o Y), con el signo de ajuste_puerta.
+   - Girar los puntos dθ alrededor del robot; d⊥ = c - media de la coordenada perpendicular.
+   - Solo se corrige el rumbo y la coordenada perpendicular a la pared (la otra no se observa).
+   Sugerencia: sacar de ajuste_puerta una función `ajuste_recta(...)` común y usarla en las dos.
+4. Salvaguardas (parámetros): puntos mínimos `wall_corr_min_points` (20), residuo `wall_corr_max_rms` (0.02),
+   |dθ| <= `wall_corr_max_angle_deg` (5), |d⊥| <= `wall_corr_max_perp` (0.30). Si falla alguna: no se corrige nada
+   y CORR_PARED_RECHAZADA <parada> <motivo> dθ=… d⊥=…. Si pasa: fijar_pose con el rumbo y la coordenada corregidos,
+   vaciar la memoria de obstáculos y CORR_PARED <parada> dθ=… d⊥=…; después repetir el ajuste desde la pose
+   corregida (como RELOC_INCONSISTENTE) y registrar CORR_PARED_INCONSISTENTE si no da ~0 (|d⊥| < 3 cm, |dθ| < 0.5°).
+5. Calibración (como la de la puerta): las caras que ve el LiDAR no tienen por qué ser las del mapa (canaleta en la
+   pared izquierda, ya en paredes.yaml a 0.04; frente de los bancos: mapa 5.86, cinta a los armarios 5.91, LiDAR sin
+   medir). Con el robot en B, D y E medido con cinta, leer la X/Y de la recta y ponerla en wall_corr_c.
+6. Activación: `wall_corr_enabled: false` por defecto en fase1.yaml; true en real.yaml cuando esté probado.
+7. Pruebas: test sin robot como test_reloc (pared sintética vista con pose creída errónea: recupera dθ y d⊥;
+   rechaza nube, pocos puntos, dθ > 5°, d⊥ > 0.30; repetición ~0). En Gazebo: initial_pose desplazada (+0.10 m y
+   +2°): en B debe salir CORR_PARED con dθ ~ -2° y d⊥ ~ -0.10 (en Y). En el robot real: el error de rumbo medido con
+   error_en_ruta.py debe quedar acotado tras cada parada.
