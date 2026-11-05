@@ -60,6 +60,25 @@ def disco(nombre, x, y, color):
             f'</cylinder></geometry>{material}</visual></link></model>\n')
 
 
+def escribir_paredes(rects, origen_x, origen_y, res):
+    # maps/paredes.yaml: los mismos rectángulos, en coordenadas del enunciado, para nodos sin Pillow
+    # (comprobar_pose). Cuatro listas paralelas. Sin zonas prohibidas: el LiDAR no las ve.
+    campos = {'x_min': [], 'x_max': [], 'y_min': [], 'y_max': []}
+    for i0, i1, j0, j1 in rects:
+        campos['x_min'].append(origen_x + i0 * res)
+        campos['x_max'].append(origen_x + i1 * res)
+        campos['y_min'].append(origen_y + j0 * res)
+        campos['y_max'].append(origen_y + j1 * res)
+    ruta = os.path.join(RAIZ, 'maps', 'paredes.yaml')
+    with open(ruta, 'w') as f:
+        f.write('# GENERADO por scripts/generar_mundo_lab.py (no editar a mano).\n')
+        f.write('# Rectángulos ocupados del mapa a 1 cm, en coordenadas del enunciado (metros).\n')
+        f.write('# Sin zonas prohibidas, que el LiDAR no ve. Cuatro listas paralelas.\n')
+        for nombre, valores in campos.items():
+            f.write(f'{nombre}: [{", ".join(f"{v:.3f}" for v in valores)}]\n')
+    print(f'{len(rects)} rectángulos -> {ruta}')
+
+
 def main():
     p = cargar_parametros()
     res = p['map_resolution']
@@ -84,6 +103,8 @@ def main():
     for n, x, y in zip(p['point_names'], p['point_x'], p['point_y']):
         color = '1 0.4 0 1' if n in p['mandatory_waypoints'] else '0.1 0.6 0.1 1'
         modelos += disco(f'punto_{n}', x, y, color)
+
+    escribir_paredes(rects, origen_x, origen_y, res)
 
     with open(os.path.join(RAIZ, 'scripts', 'plantilla_mundo.sdf')) as f:
         sdf = f.read().replace('<!-- MODELOS -->\n', modelos)

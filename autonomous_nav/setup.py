@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'fase1_node = autonomous_nav.fase1_node:main',
             'prueba_rumbo = autonomous_nav.prueba_rumbo:main',
+            'comprobar_pose = autonomous_nav.comprobar_pose:main',
         ],
     },
 )
