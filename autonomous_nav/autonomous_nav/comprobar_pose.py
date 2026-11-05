@@ -257,6 +257,14 @@ def main(args=None):
             return
         r = mediana_de_scans(node.scans)
         x, y, th, resumen = estimar(pose_ini, off, r, node.info, caras)
+        # Las paredes dan el rumbo del LiDAR. Si está montado girado (lidar_yaw_offset, positivo = girado
+        # a la izquierda), el rumbo del robot es ese menos el desfase. x, y se dejan igual: el error es
+        # |lidar_offset_x| * sin(desfase), menos de 1 mm.
+        desfase = p.get('lidar_yaw_offset', 0.0)
+        if desfase != 0.0:
+            print(f'Rumbo del LiDAR {math.degrees(th):.2f} grados; restando lidar_yaw_offset '
+                  f'({math.degrees(desfase):.2f} grados), rumbo del robot {math.degrees(th - desfase):.2f} grados')
+            th = th - desfase
         avisos = informar(pose_ini, (x, y, th), resumen)
         if escribir and avisos:
             # Con avisos la estimación no es fiable: mejor no dejar un fichero que se use sin mirar

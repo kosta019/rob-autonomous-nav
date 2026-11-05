@@ -8,3 +8,10 @@ fase1_node:
     max_linear_speed: 0.08
     tol_mandatory: 0.03
     tol_final_yaw: 0.03
+    # Rumbo de /odom (integra en el robot, no depende de la WiFi). Prueba del 05/11: 4 vueltas,
+    # error -1.3° (odom) y -1.9° (imu) frente a las paredes. yaw_imu se sigue escribiendo en el log.
+    use_imu_yaw: false
+    # Desfase de rumbo del LiDAR de ESTE robot (BOT 11), en rad; positivo = LiDAR girado a la izquierda.
+    # Solo lo usa comprobar_pose (fase1_node todavía no). Medido en A->B del 05/11: el robot avanzó a 17.81°
+    # creyendo ir a 19.30° (salida y llegada con cinta, contando la canaleta). TODO: confirmar con otra A->B.
+    lidar_yaw_offset: 0.026

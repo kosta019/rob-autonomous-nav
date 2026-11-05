@@ -1,0 +1,13 @@
+# Prueba en el robot real: solo el tramo A -> B, y parar en B.
+# Va DESPUÉS de fase1.yaml, fase1_ruta.yaml y real.yaml (sobrescribe la ruta) y ANTES de
+# initial_pose_corregida.yaml (que pone la pose de salida medida con comprobar_pose).
+# La recta A -> B sirve también para medir la desviación lateral y la escala de las ruedas.
+fase1_node:
+  ros__parameters:
+    waypoint_names: ["B"]
+    waypoints_x:    [3.102]
+    waypoints_y:    [1.722]
+    mandatory_waypoints: ["B"]          # para usar tol_mandatory (3 cm en real.yaml) y no avisar de E, Door, Q
+    # Final en B con el rumbo del tramo A -> B nominal: atan2(1.722 - 0.920, 3.102 - 0.700) = 18.46 grados.
+    # Al llegar a B el objetivo "final" ya está dentro de la tolerancia: solo gira en el sitio.
+    final_pose: [3.102, 1.722, 0.32225]
