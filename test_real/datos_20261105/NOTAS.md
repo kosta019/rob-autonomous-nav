@@ -81,3 +81,33 @@ Hipótesis: la esquina no es de 90°. PENDIENTE: triángulo 3-4-5 en la esquina 
 Ruta completa desde A. Alguien se pone delante del robot a ~1 m unos 4 s y se aparta a más de 1 m.
 Esperado: BLOQUEO, y RUTA_LIBRE a 1-2 s de apartarse, sin REPLANIFICACION ni SIN_CAMINO.
 Quien acompañe al robot, detrás o a un lado a más de 0.5 m (a < 0.35 m de los próximos 1.6 m de ruta lo para).
+
+## Ruta con ecos (15:11:46-15:12:40) — `mission_log_ruta_ecos.csv`, bag `fase1_20261105_150953`
+- 16 BLOQUEO / 7 RUTA_LIBRE / 8 REPLANIFICACION en un minuto: un "obstáculo" siempre a 0.16-0.21 m detrás a la
+  izquierda del robot, que se movía con él. En el bag: lecturas a 0.12-0.17 m a 142-149°, intensidad alta (~5000),
+  en el 25 % de los scans con el robot quieto en A (`cortas_ventana.py`, `rayo146.py`). Sin cables a esa altura.
+- Tras limpiar la ventana del LiDAR: 0 lecturas a < 0.25 m en 100 scans (`vivo_cortas.py`). Diagnóstico: ventana sucia.
+- Los RUTA_LIBRE rápidos confirman el borrado con 3 scans, pero allí los rayos daban distancias finitas (pared del
+  fondo), no 0.0.
+
+## Giróscopo descalibrado (15:29)
+- Con el robot quieto, `/imu` marcaba 0.63 rad/s en z (y 0.22 en y) y el rumbo de /odom daba vueltas; las paredes
+  (comprobar_pose) decían que el robot no giraba. La OpenCR calibra el giróscopo al encenderse: se encendió moviéndolo.
+- Arreglo: apagar y encender la OpenCR con el robot quieto en el suelo y no tocarlo ~10 s; relanzar el bringup.
+  Después `/imu` = 0.0000 (`imu_media.py`) y deriva -0.001° en 10 s. La comprobación de deriva previa lo detectó.
+
+## Ruta completa nº 2 (15:36:18-15:38:21) — `mission_log_ruta_completa_2.csv`, bag `fase1_20261105_153312`
+- A -> B (6.9 cm) -> D (6.9 cm) bien. En D->E mucha gente cruzando: 9 BLOQUEO, 6 RUTA_LIBRE, 2 REPLANIFICACION
+  (rodeo por X ~ 4.83, ~35 cm a la izquierda de la ruta original: es el "desvío" que se vio). Parado a mano en
+  (4.84, 5.47), a 0.7 m de E. Sin choques, sin SIN_CAMINO, sin ecos del robot (0 de 610 scans).
+- Arreglo del 0.0 confirmado en el pasillo (`rayos_borrado.py`): RUTA_LIBRE 1.5-2.2 s después del BLOQUEO con rayos
+  [0.0, 0.0, 3.789], [2.752, 0.0, 0.0] y [0.0, 0.0, 0.0] hacia el obstáculo (con el código viejo no se borraban).
+- La 3b limpia (una persona, se aparta antes de 3 s, sin replanificar) sigue PENDIENTE: había demasiada gente.
+- Obstáculos repetidos en X ~ 4.70, Y 5.2-6.2 (también en la ruta 1): ¿extremo de mesa o sillas fuera del mapa? Revisar.
+
+## Cambios tras la ruta nº 2
+- `obstacle_min_range: 0.20` (fase1.yaml): más cerca no entra en la memoria de obstáculos ni bloquea la ruta.
+  La parada de emergencia no lo usa.
+- comprobar_pose: si más del 5 % de los scans tiene lecturas a menos de obstacle_min_range, avisa (limpia la
+  ventana del LiDAR) y no escribe la pose.
+- real.yaml: max_linear_speed 0.12 (antes 0.08). Siguiente paso 0.15 si la ruta sale bien.

@@ -26,7 +26,8 @@ def nodo_falso(dist_obstaculo=1.0):
     # Solo lo que usa actualizar_obstaculos. Holgura 0: ninguna lectura cuenta como obstáculo nuevo,
     # así el test mira solo el borrado del obstáculo que ya estaba en memoria.
     n = SimpleNamespace(
-        w_anterior=0.0, giro_max_obstaculos=0.2, alcance_obstaculos=2.5, lidar_offset_x=0.0,
+        w_anterior=0.0, giro_max_obstaculos=0.2, alcance_obstaculos=2.5, alcance_min_obstaculos=0.20,
+        lidar_offset_x=0.0,
         meta={'resolucion': 0.05, 'origen_x': -5.0, 'origen_y': -5.0}, holgura=np.zeros((200, 200)),
         margen_estatico=0.20, separacion_log=0.20, obstaculos_log=[], memoria=MEMORIA,
         margen_borrado=0.10, escaneos_borrado=3, dist_min_cero=0.5, scan_borrado=None,
@@ -102,6 +103,22 @@ def test_olvido_por_tiempo():
     # Red de seguridad: pasado obstacle_memory_time sin verlo, se olvida aunque los rayos no lo borren
     assert pasar(nodo_falso(), [1.0], ahora=MEMORIA - 0.5) == [True]
     assert pasar(nodo_falso(), [1.0], ahora=MEMORIA + 0.5) == [False]
+
+
+def test_lecturas_muy_cercanas_no_entran_en_memoria():
+    # obstacle_min_range (0.20): un eco a 0.15 m (ventana sucia, propio robot) no se recuerda; a 0.30 m sí.
+    # Holgura alta en todo el mapa: cualquier lectura más lejos que el filtro sería un obstáculo nuevo.
+    n = nodo_falso()
+    n.obstaculos = {}
+    n.holgura = np.full((200, 200), 1.0)
+    for distancia, debe_entrar in ((0.15, False), (0.30, True)):
+        n.obstaculos = {}
+        n.scan = scan(3.0)                      # el resto, a 3 m: más lejos que obstacle_max_range, no cuenta
+        r = list(n.scan.ranges)
+        r[90] = distancia                       # a la izquierda del robot
+        n.scan.ranges = r
+        Fase1Node.actualizar_obstaculos(n, 0.0, 0.0, 0.0, 1.0)
+        assert bool(n.obstaculos) == debe_entrar, distancia
 
 
 def test_rayos_libres_lecturas_sin_dato():

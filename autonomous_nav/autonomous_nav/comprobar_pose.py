@@ -32,6 +32,7 @@ INLIERS_MIN = 30                # por debajo, aviso
 RMS_MAX = 0.02                  # m, aviso
 CORR_MAX_POS = 0.15             # m, aviso
 CORR_MAX_ANG = 5.0              # grados, aviso
+ECOS_MAX = 0.05                 # fracción de scans con lecturas a menos de obstacle_min_range: aviso (ventana sucia)
 
 
 def normalizar(a):
@@ -55,6 +56,15 @@ class ComprobarPose(Node):
         # Sin dato: 0, inf, nan o fuera de [range_min, range_max]
         r[~np.isfinite(r) | (r < msg.range_min) | (r > msg.range_max)] = np.nan
         self.scans.append(r)
+
+
+def fraccion_con_ecos(scans, dist):
+    # Fracción de scans con alguna lectura válida (no nan) a menos de dist del LiDAR. Con el robot quieto y
+    # nada alrededor, solo pueden ser ecos del propio robot: la ventana del LiDAR sucia (05/11).
+    if not scans:
+        return 0.0
+    with np.errstate(invalid='ignore'):
+        return sum(bool(np.any(s < dist)) for s in scans) / len(scans)
 
 
 def mediana_de_scans(scans):
@@ -266,6 +276,11 @@ def main(args=None):
                   f'({math.degrees(desfase):.2f} grados), rumbo del robot {math.degrees(th - desfase):.2f} grados')
             th = th - desfase
         avisos = informar(pose_ini, (x, y, th), resumen)
+        ecos = fraccion_con_ecos(node.scans, p['obstacle_min_range'])
+        if ecos > ECOS_MAX:
+            print(f'AVISO: el {ecos * 100:.0f} % de los scans tiene lecturas a menos de '
+                  f"{p['obstacle_min_range']:.2f} m: limpia la ventana del LiDAR (o aparta lo que haya al lado)")
+            avisos.append('ecos cercanos')
         if escribir and avisos:
             # Con avisos la estimación no es fiable: mejor no dejar un fichero que se use sin mirar
             print('No escribo initial_pose_corregida.yaml: hay avisos. Revisa la colocación y repite.')

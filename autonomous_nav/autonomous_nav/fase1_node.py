@@ -94,6 +94,9 @@ class Fase1Node(Node):
         self.dist_min_cero = self.declare_parameter('obstacle_clear_zero_min_dist', D).value
         self.separacion_log = self.declare_parameter('obstacle_log_spacing', D).value
         self.alcance_obstaculos = self.declare_parameter('obstacle_max_range', D).value
+        # Más cerca que esto no se recuerda nada (solo puede ser el propio robot o un eco de la ventana del LiDAR).
+        # La parada de emergencia del cono frontal NO usa este filtro.
+        self.alcance_min_obstaculos = self.declare_parameter('obstacle_min_range', D).value
         self.giro_max_obstaculos = self.declare_parameter('obstacle_max_turn_rate', D).value
         self.alcance_bloqueo = self.declare_parameter('block_lookahead', D).value
         self.histeresis = self.declare_parameter('block_hysteresis', D).value
@@ -287,7 +290,8 @@ class Fase1Node(Node):
         ly = y + self.lidar_offset_x * math.sin(th)
 
         # a) Lecturas válidas y cercanas en el mundo, y las que no explica el mapa
-        validas = np.isfinite(r) & (r >= msg.range_min) & (r <= min(msg.range_max, self.alcance_obstaculos))
+        validas = (np.isfinite(r) & (r >= max(msg.range_min, self.alcance_min_obstaculos))
+                   & (r <= min(msg.range_max, self.alcance_obstaculos)))
         px = lx + r[validas] * np.cos(th + a[validas])
         py = ly + r[validas] * np.sin(th + a[validas])
         res = self.meta['resolucion']

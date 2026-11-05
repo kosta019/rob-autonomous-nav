@@ -49,6 +49,8 @@ fase1_node:
     obstacle_clear_margin: 0.10  # m: se olvida antes si un rayo del LiDAR pasa esto más allá de él (se ha ido)
     obstacle_log_spacing: 0.20   # m: un obstáculo va al Mission Log si está a esto de los ya registrados
     obstacle_max_range: 2.5      # m: más lejos, un error pequeño de rumbo ya desplaza mucho la lectura
+    obstacle_min_range: 0.20     # m: más cerca no se recuerda (propio robot, ecos de la ventana sucia: 05/11 a 12-17 cm).
+                                 #   La parada de emergencia no lo usa. comprobar_pose avisa si hay ecos más cerca.
     obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria (el scan llega con retraso
                                  #   y las paredes aparecen desplazadas: con 0.8 rad/s se veían obstáculos falsos)
     block_lookahead: 1.5         # m de ruta por delante en los que se busca bloqueo (a menos de inflation_radius)
