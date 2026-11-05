@@ -135,3 +135,7 @@ Notas sobre la tabla:
 - **Inflado de obstáculos de 0.25 m, nunca más de 0.30 m:** con 0.33 m la puerta se cierra en la rejilla de 5 cm.
 - **Navegación propia, sin Nav2** (pendiente de confirmar con el profesor). El SLAM (slam_toolbox) entra más adelante y también está pendiente de confirmar.
 - **Ninguna coordenada en el código.** Puntos, poses, zonas y parámetros van en `config/*.yaml`. El profesor ya cambió las coordenadas una vez.
+- **Robot real (BOT 11), pruebas del 05/11/2026:**
+  - **Rumbo de `/odom`** (`use_imu_yaw: false` en `real.yaml`): se integra en el robot, así que un corte de WiFi no pierde giro. El driver lo saca del IMU de la OpenCR (`odometry.use_imu: true`), no de las ruedas: no se toca el robot durante la ruta.
+  - **Canaleta de cables** en la pared del fondo y en la izquierda: sobresale 4 cm y el LiDAR la ve a ella, no al yeso. Está en `maps/paredes.yaml` (caras a 0.04). El sistema de coordenadas sigue siendo el yeso.
+  - **`lidar_yaw_offset: 0.019` rad** (1.09°), solo en `comprobar_pose`. Dos A→B: la 1ª dio 1.49°, con la salida estimada (comprobar_pose + canaleta, sin cinta en A); la 2ª, ya corregida con 1.49°, dejó 0.46° de error → 1.03°, con cinta en A y en B. Pesa más la 2ª, por eso 0.019 y no la media (0.022).
