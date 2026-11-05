@@ -51,6 +51,22 @@ def rayos_libres(rayos, d, margen, dist_min_cero):
     return True
 
 
+def punto_sustituto(holgura, meta, ox, oy, inflado, radio):
+    # Punto obligatorio (ox, oy) tapado por un obstáculo: la celda libre (holgura > inflado) más cercana a él, a menos
+    # de 'radio'. Devuelve su centro (x, y) o None si no hay ninguna.
+    res = meta['resolucion']
+    i0, j0 = pl.mundo_a_celda(ox, oy, meta)
+    r = int(math.ceil(radio / res))
+    mejor = None
+    for i in range(max(0, i0 - r), min(holgura.shape[0], i0 + r + 1)):
+        for j in range(max(0, j0 - r), min(holgura.shape[1], j0 + r + 1)):
+            cx, cy = pl.celda_a_mundo(i, j, meta)
+            d = math.hypot(cx - ox, cy - oy)
+            if d <= radio and holgura[i, j] > inflado and (mejor is None or d < mejor[0]):
+                mejor = (d, cx, cy)
+    return None if mejor is None else (mejor[1], mejor[2])
+
+
 def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
                   min_cercano, max_dx, max_dy, max_ang, fondo_marco):
     # Relocalización con la pared de la puerta (lado sala), con el robot parado. px, py: puntos del scan pasados al
@@ -231,6 +247,11 @@ class Fase1Node(Node):
         self.histeresis = self.declare_parameter('block_hysteresis', D).value
         self.espera = self.declare_parameter('obstacle_wait_time', D).value
         self.reintento = self.declare_parameter('replan_retry_period', D).value
+        # Obligatorio tapado: tras mandatory_cover_wait s sin camino, se va al punto libre más cercano a él (a menos de
+        # mandatory_cover_radius) y se da por alcanzado (OBLIGATORIO_TAPADO). Nunca para los de mandatory_cover_exclude.
+        self.tapado_radio = self.declare_parameter('mandatory_cover_radius', D).value
+        self.tapado_espera = self.declare_parameter('mandatory_cover_wait', D).value
+        self.tapado_excluir = self.declare_parameter('mandatory_cover_exclude', SA).value
         self.inflado = self.declare_parameter('inflation_radius', D).value
         self.inflados = [self.inflado, self.declare_parameter('inflation_radius_retry', D).value,
                          self.declare_parameter('inflation_radius_min', D).value]
@@ -295,6 +316,8 @@ class Fase1Node(Node):
         self.n_replan = 0
         self.w_anterior = 0.0       # última velocidad angular mandada
         self.reloc_scans_lista = [] # scans juntados en RELOC
+        self.t_sin_camino = None    # desde cuándo no hay camino (para el obligatorio tapado)
+        self.sustitutos = {}        # nombre del sustituto -> (obligatorio, x, y)
         self.reloc_ultimo_scan = None
 
         # 4. Publicador y suscriptores (QoS como en la plantilla)
@@ -494,13 +517,17 @@ class Fase1Node(Node):
         # Estado ESPERAR (robot parado). Si la ruta se libera, se sigue con el plan que había.
         # Si a los obstacle_wait_time s sigue bloqueada, se replanifica (con el robot parado).
         if self.ruta_bloqueada(x, y, self.histeresis) is None:
+            self.t_sin_camino = None
             self.get_logger().info('Ruta libre: sigo con el plan')
             self.estado = 'GIRAR'
             self.escribir_log(x, y, th, 'RUTA_LIBRE')
             return
         if ahora - self.t_espera < self.espera:
             return
-        inflado, segundos = self.replanificar(x, y)
+        if self.t_sin_camino is None:
+            self.t_sin_camino = ahora
+        sustituir = ahora - self.t_sin_camino >= self.tapado_espera
+        inflado, segundos = self.replanificar(x, y, sustituir)
         if inflado is None:
             self.get_logger().warn(f'Sin camino ({segundos:.2f} s): reintento en {self.reintento:.0f} s')
             self.escribir_log(x, y, th, 'SIN_CAMINO', segundos)
@@ -509,15 +536,18 @@ class Fase1Node(Node):
         self.get_logger().info(f'Replanificado con inflado {inflado:.2f} m en {segundos:.2f} s: '
                                f'{[o[0] for o in self.objetivos[self.i_objetivo:]]}')
         self.escribir_log(x, y, th, f'REPLANIFICACION inflado={inflado:.2f}', segundos)
+        self.t_sin_camino = None
         self.estado = 'GIRAR'
 
-    def replanificar(self, x, y):
+    def replanificar(self, x, y, sustituir=False):
         # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
         # anclas que queden por el camino; después sigue la lista original.
         # Devuelve (inflado usado, segundos), o (None, segundos) si no hay camino ni con el inflado mínimo.
+        # sustituir: si el obligatorio está tapado, ir al punto libre más cercano a él (punto_sustituto).
         t0 = time.perf_counter()
         resto = self.objetivos[self.i_objetivo:]
-        k = next(k for k, o in enumerate(resto) if o[0] in self.obligatorios or o[0] == 'final')
+        k = next(k for k, o in enumerate(resto)
+                 if o[0] in self.obligatorios or o[0] in self.sustitutos or o[0] == 'final')
         anclas = [o for o in resto[:k] if o[0] in self.anclas] + [resto[k]]
         despues = resto[k + 1:]
         obst = [(v[0], v[1]) for v in self.obstaculos.values()]
@@ -525,11 +555,19 @@ class Fase1Node(Node):
         self.n_replan += 1
 
         for inflado in self.inflados:
-            # Un punto obligatorio tapado por un obstáculo no se puede saltar: no hay camino (se espera).
-            # Un ancla no obligatoria tapada se salta.
-            if pl.holgura_en(holgura, self.meta, anclas[-1][1], anclas[-1][2]) <= inflado:
-                continue
-            lista = [o for o in anclas[:-1] if pl.holgura_en(holgura, self.meta, o[1], o[2]) > inflado] + [anclas[-1]]
+            # Un punto obligatorio tapado por un obstáculo no se puede saltar: no hay camino (se espera), salvo que
+            # ya toque sustituirlo por el punto libre más cercano. Un ancla no obligatoria tapada se salta.
+            objetivo = anclas[-1]
+            if pl.holgura_en(holgura, self.meta, objetivo[1], objetivo[2]) <= inflado:
+                if not (sustituir and objetivo[0] in self.obligatorios and objetivo[0] not in self.tapado_excluir):
+                    continue
+                s = punto_sustituto(holgura, self.meta, objetivo[1], objetivo[2], inflado, self.tapado_radio)
+                if s is None:
+                    continue
+                self.sustitutos[objetivo[0] + '~'] = (objetivo[0], objetivo[1], objetivo[2])
+                objetivo = (objetivo[0] + '~', s[0], s[1], self.tol_waypoint)
+                self.get_logger().warn(f'{objetivo[0][:-1]} tapado: voy a ({s[0]:.2f}, {s[1]:.2f}) en su lugar')
+            lista = [o for o in anclas[:-1] if pl.holgura_en(holgura, self.meta, o[1], o[2]) > inflado] + [objetivo]
             coste = pl.mapa_de_costes(holgura, inflado, self.holgura_objetivo, self.ganancia)
             nuevos = []
             p = (x, y)
@@ -705,6 +743,11 @@ class Fase1Node(Node):
         if dist < tol:
             self.get_logger().info(f'Waypoint {nombre} alcanzado (error {dist:.3f} m)')
             self.escribir_log(x, y, th, f'WAYPOINT {nombre}', dist)
+            if nombre in self.sustitutos:
+                real, rx_, ry_ = self.sustitutos[nombre]
+                d_real = math.hypot(rx_ - x, ry_ - y)
+                self.get_logger().warn(f'{real} tapado: dado por alcanzado a {d_real:.2f} m')
+                self.escribir_log(x, y, th, f'OBLIGATORIO_TAPADO {real} {d_real:.3f}', d_real)
             self.i_objetivo += 1
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
             # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno replanificado)

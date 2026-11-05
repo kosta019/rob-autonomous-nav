@@ -57,6 +57,9 @@ fase1_node:
     block_hysteresis: 0.10       # m: para dar la ruta por LIBRE se pide esto de más (en distancia y en alcance)
     obstacle_wait_time: 3.0      # s parado antes de replanificar (por si es una persona que pasa)
     replan_retry_period: 5.0     # s entre reintentos si no hay camino
+    mandatory_cover_radius: 0.40 # m: obligatorio tapado -> punto libre más cercano a él a menos de esto (OBLIGATORIO_TAPADO)
+    mandatory_cover_wait: 5.0    # s sin camino antes de sustituir un obligatorio tapado
+    mandatory_cover_exclude: ["Door"]   # nunca se sustituyen (la puerta bloqueada no se puede dar por pasada)
     inflation_radius_retry: 0.20 # m, segundo intento si no hay camino; el tercero es inflation_radius_min
 
     # ---------- Robot ----------

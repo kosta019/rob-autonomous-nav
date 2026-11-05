@@ -192,3 +192,13 @@ pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
   79.8°, a 0.429 m de la canaleta y 0.21 m por encima del marco. Puntos de pared esperados por geometría: 36 (la misma
   cuenta da 22 y 27 en las posiciones de calibración y (b), donde en vivo hubo 24-25 y 30-33).
 - test_planificador: referencias actualizadas y justificadas (holgura en E, D->E con intermedio, E->Door con dos).
+
+## Ruta completa nº 4 (17:06:34-17:08:20) — `mission_log_ruta_completa_4.csv`
+- Salida (rumbo con la pared izquierda): (0.686, 0.913, 1.04°). B 6.9 cm, D 6.8 cm. 17:07:33 BLOQUEO en (5.13, 4.12) por un
+  objeto en (5.20, 5.77) y SIN_CAMINO cada 5 s. En vivo (`zona_E_vivo.py`): tubos de la mesa en X 5.52-5.60 (la zona
+  empieza en 5.51: la pose cuadra) y un objeto pequeño en (5.17-5.20, 5.84-5.86), a 0.29 m de E (una pata de silla,
+  según el usuario; quitada). E obligatorio tapado -> sin camino.
+- Cambios (aprobados): real.yaml block_lookahead 1.5 -> 0.40 y obstacle_wait_time 3 -> 2 s (se paraba a 1.65 m;
+  ahora a 0.44-0.65 m del obstáculo, fuera de los 0.35 del planificador). Obligatorio tapado: tras 5 s sin camino, va
+  al punto libre más cercano a menos de 0.40 m (punto_sustituto) y al llegar escribe OBLIGATORIO_TAPADO; nunca Door.
+  Con el caso de la ruta 4 (sin robot): E~ en (5.065, 6.205), a 8.5 cm de E y 0.38 m del objeto.

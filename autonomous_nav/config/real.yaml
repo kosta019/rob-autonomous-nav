@@ -11,6 +11,10 @@ fase1_node:
     # Red de seguridad (05/11): en la ruta completa una persona cruzó a 1 m de E y el robot no la olvidó en 60 s
     # (los rayos daban 0.0, que antes no borraba, y con 30 s de memoria la gente que pasaba reiniciaba la cuenta).
     obstacle_memory_time: 8.0
+    # 05/11: en la ruta 4 se paró a 1.65 m de un obstáculo. Con 0.40 m de ruta por delante (y 0.25 de lado) se para
+    #   a 0.44-0.65 m del obstáculo, fuera de los 0.35 (inflado + margen) que pide el planificador.
+    block_lookahead: 0.40
+    obstacle_wait_time: 2.0
     # Rumbo de /odom (integra en el robot, no depende de la WiFi). Prueba del 05/11: 4 vueltas,
     # error -1.3° (odom) y -1.9° (imu) frente a las paredes. yaw_imu se sigue escribiendo en el log.
     # Ojo: el driver del TB3 (odometry.use_imu: true) saca el rumbo de /odom del IMU de la OpenCR, no de las
