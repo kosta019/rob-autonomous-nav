@@ -42,10 +42,10 @@ python3 autonomous_nav/scripts/planificar_fase1.py          # genera config/fase
 python3 -m pytest autonomous_nav/test/test_planificador.py  # compara con los valores de referencia de TAREA_FASE1.md
 ```
 
-Tests de la regla de borrado de obstáculos y del aviso de ecos de comprobar_pose (sin robot, en el PC del laboratorio, con ROS cargado):
+Tests sin robot de la regla de borrado, de los avisos de comprobar_pose (ecos, giróscopo) y de la relocalización (sin robot, en el PC del laboratorio, con ROS cargado):
 
 ```bash
-python3 -m pytest autonomous_nav/test/test_borrado.py autonomous_nav/test/test_comprobar_pose.py -v
+python3 -m pytest autonomous_nav/test/test_borrado.py autonomous_nav/test/test_comprobar_pose.py autonomous_nav/test/test_reloc.py -v
 ```
 
 ## Mundo de Gazebo del laboratorio
