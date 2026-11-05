@@ -127,6 +127,8 @@ class Fase1Node(Node):
         self.y_rel = 0.0
         self.th_rel = 0.0
         self.yaw_imu = 0.0          # giro acumulado según el giróscopo desde la salida
+        self.yaw_odom = 0.0         # giro acumulado según /odom (solo para el log; no se usa para navegar)
+        self.hueco_imu = None       # duración de un hueco de /imu pendiente de escribir en el log
         self.t_imu_anterior = None  # sello de tiempo del último /imu (para el dt de la integración)
         self.t_odom = None
         self.t_imu = None
@@ -151,8 +153,7 @@ class Fase1Node(Node):
         self.publisher = self.create_publisher(TwistStamped, '/cmd_vel', qos_profile_r)
         self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_b)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile_b)
-        if self.usar_imu:
-            self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)
+        self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)  # siempre: se registra en el log
 
         # 5. Mission Log. Un fichero por ejecución (con la fecha) para no machacar el de otra prueba.
         base, ext = os.path.splitext(log_file)
@@ -160,7 +161,7 @@ class Fase1Node(Node):
         self.fichero = open(ruta_log, 'w', newline='')
         self.csv = csv.writer(self.fichero)
         self.csv.writerow(['timestamp', 'current_phase', 'robot_x', 'robot_y', 'robot_yaw',
-                           'state', 'event', 'error', 'obstacle_x', 'obstacle_y'])
+                           'state', 'event', 'error', 'obstacle_x', 'obstacle_y', 'yaw_odom', 'yaw_imu'])
         self.get_logger().info(f'Mission Log en {os.path.abspath(ruta_log)}')
 
         # 6. Bucle de control a ritmo fijo
@@ -177,6 +178,7 @@ class Fase1Node(Node):
             xa, ya, tha = self.odom_anterior
             # Avance (con signo) desde la lectura anterior, en la dirección en que iba según /odom.
             # De /odom solo nos fiamos de la distancia: el rumbo, si se puede, lo da el giróscopo.
+            self.yaw_odom += normalizar(th - tha)
             ds = (x - xa) * math.cos(tha) + (y - ya) * math.sin(tha)
             th_antes = self.th_rel
             self.th_rel = self.yaw_imu if self.usar_imu else self.th_rel + normalizar(th - tha)
@@ -190,8 +192,14 @@ class Fase1Node(Node):
         # Rumbo integrando la velocidad angular del giróscopo (como hace el driver del TB3 real).
         # Con el sello de tiempo del propio /imu: el dt entre dos lecturas del mismo reloj.
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        if self.t_imu_anterior is not None and 0.0 < t - self.t_imu_anterior < 0.5:
-            self.yaw_imu += msg.angular_velocity.z * (t - self.t_imu_anterior)
+        if self.t_imu_anterior is not None:
+            dt = t - self.t_imu_anterior
+            if 0.0 < dt < 0.5:
+                self.yaw_imu += msg.angular_velocity.z * dt
+            elif dt >= 0.5:
+                # Hueco: el giro de ese rato se pierde. Se apunta y control_loop lo escribe en el log.
+                self.hueco_imu = dt
+                self.get_logger().warn(f'Hueco de {dt:.2f} s en /imu')
         self.t_imu_anterior = t
         self.t_imu = self.get_clock().now()
 
@@ -398,6 +406,10 @@ class Fase1Node(Node):
             self.get_logger().info('Sensores OK')
             self.escribir_log(x, y, th, 'SENSORES_OK')
 
+        if self.hueco_imu is not None:
+            self.escribir_log(x, y, th, 'IMU_HUECO', self.hueco_imu)
+            self.hueco_imu = None
+
         # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
         ahora_s = self.get_clock().now().nanoseconds * 1e-9
         self.actualizar_obstaculos(x, y, th, ahora_s)
@@ -489,12 +501,17 @@ class Fase1Node(Node):
         msg.twist.angular.z = w
         self.publisher.publish(msg)
 
+    def yaws_log(self):
+        # Rumbo según /odom y según el giróscopo, ambos en el sistema del mundo (para compararlos)
+        thi = self.pose_inicial[2]
+        return round(normalizar(thi + self.yaw_odom), 3), round(normalizar(thi + self.yaw_imu), 3)
+
     def escribir_log(self, x, y, th, evento, error=None, ox=None, oy=None):
         def r3(v):
             return '' if v is None else round(v, 3)
         t = self.get_clock().now().nanoseconds * 1e-9  # en Gazebo, tiempo simulado
         self.csv.writerow([round(t, 3), 'I', r3(x), r3(y), r3(th), self.estado, evento,
-                           r3(error), r3(ox), r3(oy)])
+                           r3(error), r3(ox), r3(oy), *self.yaws_log()])
         self.fichero.flush()  # que no se pierda nada con un Ctrl+C
 
 

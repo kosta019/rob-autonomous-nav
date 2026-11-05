@@ -1,0 +1,10 @@
+# Parámetros para el robot REAL (tercer --params-file). Orden de los ficheros, cada uno
+# sobrescribe al anterior:
+#   fase1.yaml, fase1_ruta.yaml, real.yaml y, si existe, initial_pose_corregida.yaml el último.
+# A 0.08 m/s la ruta completa dura unos 4-5 min.
+fase1_node:
+  ros__parameters:
+    use_sim_time: false
+    max_linear_speed: 0.08
+    tol_mandatory: 0.03
+    tol_final_yaw: 0.03
