@@ -51,70 +51,114 @@ def rayos_libres(rayos, d, margen, dist_min_cero):
     return True
 
 
-def ajuste_puerta(px, py, rx, ry, x_pared, y_hueco, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
-                  min_cercano, max_dist, max_ang):
+def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
+                  min_cercano, max_dx, max_dy, max_ang, fondo_marco):
     # Relocalización con la pared de la puerta (lado sala), con el robot parado. px, py: puntos del scan pasados al
-    # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. La pared real es la recta x = x_pared con el
-    # hueco de la puerta entre y_hueco[0] (lado cercano, el de E) e y_hueco[1].
-    # 1. Rumbo y X: recta x = a + b*y con los puntos de la pared a los dos lados del hueco.
-    # 2. Y: el borde CERCANO del hueco (siempre se ve desde E-Door_1; el lejano lo tapa la hoja de la puerta abierta).
-    #    El ancho del hueco es solo un aviso.
+    # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. Referencias CALIBRADAS con el robot en una pose
+    # medida con cinta: x_pared = X a la que el LiDAR ve la pared (la canaleta) e y_borde = Y del lateral del marco
+    # del borde cercano del hueco.
+    # 1. Rumbo y X: recta x = a + b*y con el tramo de pared cercano (la hoja de la puerta, en el lado lejano, no entra).
+    # 2. Y: el lateral del marco (puntos detrás de la recta justo donde se acaba la pared). El ancho es solo un aviso.
     # Devuelve (dx, dy, dth, nivel, motivo, datos): la corrección a sumar a la pose creída; nivel 'total' (dx, dy,
     # dth), 'parcial' (solo dx y dth: la Y no es fiable) o '' (nada: la recta no es fiable); motivo; y lo medido.
-    # La recta se ajusta SOLO con el tramo de pared cercano (hasta y_hueco[0] + max_dist + 0.10): la hoja de la
-    # puerta abierta hacia la sala (en el borde lejano, perpendicular a la pared y muy cerca de E-Door_1) no puede
-    # entrar, ni siquiera junto a la bisagra (con ~1 m de brazo torcería el rumbo). En dos pasadas, quitando lo que
-    # queda lejos (10 y 5 cm); el residuo se mide con lo que queda a < 5 cm (recortar más haría que una pared con
-    # mucho ruido pareciera limpia).
+    datos = {'n': 0, 'rms': None, 'x_linea': None, 'y1': None, 'y2': None, 'ancho': None, 'aviso_ancho': False}
     en_banda = np.abs(px - x_pared) < banda
-    tope = y_hueco[0] + max_dist + 0.10
-    sel = en_banda & (py > y_hueco[0] - largo - max_dist) & (py < tope)
+    sel = en_banda & (py > y_borde - largo - max_dy) & (py < y_borde + max_dy + 0.10)
     x, y = px[sel], py[sel]
-    datos = {'n': int(len(x)), 'rms': None, 'ancho': None, 'y1': None, 'y2': None, 'aviso_ancho': False}
+    datos['n'] = int(len(x))
     if len(x) < min_puntos:
         return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
-    for umbral in (0.10, 0.05):
-        b, a = np.polyfit(y, x, 1)
-        cerca = np.abs(x - (a + b * y)) < umbral
-        x, y = x[cerca], y[cerca]
-        datos['n'] = int(len(x))
+
+    def mejor_recta(qx, qy):
+        # Punto de partida robusto: de todas las rectas x = a + b*y que pasan por dos puntos separados más de 0.3 m en y
+        # (y con menos de 6° de pendiente), la que tiene más puntos a < 2 cm. Es la canaleta: lo que más puntos tiene
+        # alineados. (Un ajuste por mínimos cuadrados con todo saldría torcido por el escalón de yeso y el marco.)
+        mejor = (0, 0.0, 0.0)
+        for i in range(len(qy)):
+            for j in range(i + 1, len(qy)):
+                if abs(qy[j] - qy[i]) < 0.3:
+                    continue
+                b = (qx[j] - qx[i]) / (qy[j] - qy[i])
+                if abs(b) > math.tan(math.radians(6.0)):
+                    continue
+                a = qx[i] - b * qy[i]
+                n = int(np.sum(np.abs(qx - (a + b * qy)) < 0.02))
+                if n > mejor[0]:
+                    mejor = (n, a, b)
+        return mejor
+
+    def tramo_mas_largo(qx, qy, a, b):
+        # Puntos a < 2 cm de la recta x = a + b*y, y de ellos el tramo continuo (sin saltos de más de 10 cm en y) más
+        # largo: la canaleta. Así no entran el escalón de yeso del final, el marco ni algo que haya en el hueco.
+        cerca = np.abs(qx - (a + b * qy)) < 0.02
+        cx, cy = qx[cerca], qy[cerca]
+        orden = np.argsort(cy)
+        cx, cy = cx[orden], cy[orden]
+        if len(cy) == 0:
+            return cx, cy
+        cortes = np.where(np.diff(cy) > 0.10)[0] + 1
+        tramos = np.split(np.arange(len(cy)), cortes)
+        mejor = max(tramos, key=lambda k: cy[k[-1]] - cy[k[0]])
+        return cx[mejor], cy[mejor]
+
+    def marco_y(xl, qx, qy, yfin):
+        # Lateral del marco: puntos más de fondo_marco por detrás de la recta (x = xl), justo donde acaba la pared
+        m = (qx > xl + fondo_marco) & (qx < xl + banda) & (qy > yfin - 0.05) & (qy < yfin + 0.25)
+        return float(np.median(qy[m])) if np.sum(m) >= 3 else None
+
+    # 1. Recta de partida (la de más puntos a < 2 cm); 2. recta definitiva con su tramo continuo más largo
+    n, a, b = mejor_recta(x, y)
+    if n < min_puntos:
+        datos['n'] = n
+        return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
+    for _ in range(2):
+        x, y = tramo_mas_largo(px[sel], py[sel], a, b)
         if len(x) < min_puntos:
+            datos['n'] = int(len(x))
             return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
-    b, a = np.polyfit(y, x, 1)
+        b, a = np.polyfit(y, x, 1)
+    datos['n'] = int(len(x))
     datos['rms'] = float(np.sqrt(np.mean((x - (a + b * y)) ** 2)))
     # Rumbo: la recta debería ir exactamente en dirección Y. Se corrige girando los puntos alrededor del robot
     # (así su posición no cambia con el giro); después, la X.
     dth = math.atan(b)
     c, s = math.cos(dth), math.sin(dth)
-    xr = rx + c * (x - rx) - s * (y - ry)
-    yr = ry + s * (x - rx) + c * (y - ry)
-    dx = x_pared - float(np.mean(xr))
+
+    def girar(qx, qy):
+        return rx + c * (qx - rx) - s * (qy - ry), ry + s * (qx - rx) + c * (qy - ry)
+
+    xr, yr = girar(x, y)
+    datos['x_linea'] = float(np.mean(xr))
+    dx = x_pared - datos['x_linea']
     if datos['rms'] > max_rms:
         return dx, 0.0, dth, '', 'residuo', datos
-    if abs(dx) > max_dist:
-        return dx, 0.0, dth, '', 'dxy', datos
+    if abs(dx) > max_dx:
+        return dx, 0.0, dth, '', 'dx', datos
     if abs(dth) > max_ang:
         return dx, 0.0, dth, '', 'dth', datos
-    # Borde cercano: final del primer tramo continuo de pared, subiendo en y (un salto de más de medio ancho de puerta
-    # es el hueco; los saltos pequeños, p. ej. la pata de una silla, no cortan el tramo)
-    ys = np.sort(yr)
-    grandes = np.where(np.diff(ys) > 0.5 * ancho)[0]
-    k = int(grandes[0]) if len(grandes) else len(ys) - 1
-    datos['y1'] = float(ys[k])
-    # Ancho del hueco, solo como aviso: hasta el primer punto de pared al otro lado (a < 3 cm de la recta), si se ve
-    lejos = en_banda & (py >= tope) & (py < y_hueco[1] + largo) & (np.abs(px - (a + b * py)) < 0.03)
-    yl = ry + s * (px[lejos] - rx) + c * (py[lejos] - ry)
-    yl = yl[yl > datos['y1'] + 0.5 * ancho]
-    if len(yl):
-        datos['y2'] = float(yl.min())
-        datos['ancho'] = datos['y2'] - datos['y1']
+    # 3. Borde cercano: el lateral del marco, justo donde acaba el tramo de pared (la canaleta)
+    qx, qy = girar(px[en_banda], py[en_banda])
+    y1 = marco_y(datos['x_linea'], qx, qy, float(np.max(yr)))
+    if y1 is None:
+        return dx, 0.0, dth, 'parcial', 'sin_borde', datos
+    datos['y1'] = y1
+    # Borde creíble: pared justo antes de y1, y nada sobre la línea de pared en los 0.5*ancho siguientes
+    linea = np.abs(qx - datos['x_linea']) < 0.05
+    antes = np.sum(linea & (qy > y1 - 0.5) & (qy <= y1))
+    ocupado = np.sum(linea & (qy > y1 + 0.02) & (qy < y1 + 0.5 * ancho))
+    # Ancho, solo como aviso: hasta el primer punto sobre la línea al otro lado (la bisagra de la hoja)
+    lejos = qy[(np.abs(qx - datos['x_linea']) < 0.03) & (qy >= y1 + 0.5 * ancho)]
+    if len(lejos):
+        datos['y2'] = float(lejos.min())
+        datos['ancho'] = datos['y2'] - y1
     datos['aviso_ancho'] = datos['ancho'] is None or abs(datos['ancho'] - ancho) > tol_ancho
-    dy = y_hueco[0] - datos['y1']
-    if k + 1 < min_cercano:
-        return dx, dy, dth, 'parcial', 'sin_borde', datos   # el tramo cercano no se ve (tapado)
-    if math.hypot(dx, dy) > max_dist:
-        return dx, dy, dth, 'parcial', 'dy', datos          # el borde no está donde debería: no se fía de la Y
+    dy = y_borde - y1
+    if antes < min_cercano or ocupado > 0:
+        return dx, dy, dth, 'parcial', 'borde', datos     # borde poco creíble (tapado, o algo en el hueco)
+    if abs(dy) > max_dy:
+        return dx, dy, dth, 'parcial', 'dy', datos
     return dx, dy, dth, 'total', '', datos
+
 
 class Fase1Node(Node):
     def __init__(self):
@@ -148,19 +192,23 @@ class Fase1Node(Node):
         self.timeout = self.declare_parameter('scan_timeout', D).value
         self.lidar_offset_x = self.declare_parameter('lidar_offset_x', D).value
         self.lidar_yaw_offset = self.declare_parameter('lidar_yaw_offset', D).value
-        # Relocalización con las paredes del mapa al llegar a ciertos waypoints (robot parado)
-        self.reloc_puntos = self.declare_parameter('reloc_waypoints', SA).value
+        # Relocalización con la pared de la puerta, en el último waypoint antes de reloc_before (robot parado)
+        self.reloc_antes_de = self.declare_parameter('reloc_before', Parameter.Type.STRING).value
         self.reloc_n = self.declare_parameter('reloc_scans', Parameter.Type.INTEGER).value
         self.reloc_pared_x = self.declare_parameter('reloc_wall_x', D).value
-        self.reloc_hueco_y = self.declare_parameter('reloc_door_y', DA).value
+        self.reloc_borde_y = self.declare_parameter('reloc_edge_y', D).value
         self.reloc_ancho = self.declare_parameter('reloc_door_width', D).value
         self.reloc_tol_ancho = self.declare_parameter('reloc_door_width_tol', D).value
         self.reloc_banda = self.declare_parameter('reloc_band', D).value
         self.reloc_largo = self.declare_parameter('reloc_wall_length', D).value
+        self.reloc_fondo_marco = self.declare_parameter('reloc_frame_depth', D).value
         self.reloc_max_rms = self.declare_parameter('reloc_max_rms', D).value
         self.reloc_min_puntos = self.declare_parameter('reloc_min_points', Parameter.Type.INTEGER).value
         self.reloc_min_cercano = self.declare_parameter('reloc_min_points_near', Parameter.Type.INTEGER).value
-        self.reloc_max_dist = self.declare_parameter('reloc_max_dist', D).value
+        self.reloc_max_dx = self.declare_parameter('reloc_max_dx', D).value
+        self.reloc_max_dy = self.declare_parameter('reloc_max_dy', D).value
+        self.reloc_comprobar_dist = self.declare_parameter('reloc_check_dist', D).value
+        self.reloc_comprobar_ang = math.radians(self.declare_parameter('reloc_check_angle_deg', D).value)
         self.reloc_max_ang = math.radians(self.declare_parameter('reloc_max_angle_deg', D).value)
         self.usar_imu = self.declare_parameter('use_imu_yaw', Parameter.Type.BOOL).value
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
@@ -246,7 +294,6 @@ class Fase1Node(Node):
         self.t_espera = None        # cuándo empezó la espera en ESPERAR
         self.n_replan = 0
         self.w_anterior = 0.0       # última velocidad angular mandada
-        self.reloc_hechas = set()   # waypoints donde ya se relocalizó (una vez cada uno)
         self.reloc_scans_lista = [] # scans juntados en RELOC
         self.reloc_ultimo_scan = None
 
@@ -471,8 +518,7 @@ class Fase1Node(Node):
         t0 = time.perf_counter()
         resto = self.objetivos[self.i_objetivo:]
         k = next(k for k, o in enumerate(resto) if o[0] in self.obligatorios or o[0] == 'final')
-        # Los puntos de relocalización también se conservan (si no, un replan antes de la puerta se salta E-Door_1)
-        anclas = [o for o in resto[:k] if o[0] in self.anclas or o[0] in self.reloc_puntos] + [resto[k]]
+        anclas = [o for o in resto[:k] if o[0] in self.anclas] + [resto[k]]
         despues = resto[k + 1:]
         obst = [(v[0], v[1]) for v in self.obstaculos.values()]
         holgura = pl.holgura_con_obstaculos(self.holgura, self.meta, obst, self.margen_plan, self.holgura_objetivo)
@@ -516,39 +562,53 @@ class Fase1Node(Node):
         self.reloc_scans_lista.append(r)
         if len(self.reloc_scans_lista) < self.reloc_n:
             return
-        # Mediana de los scans, y cada lectura al mundo con la pose creída
+        # Mediana de los scans; cada lectura al mundo con la pose creída, y el ajuste a la pared de la puerta
         r = cp.mediana_de_scans(self.reloc_scans_lista)
         a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+        dx, dy, dth, nivel, motivo, d = self.ajustar_puerta(r, a, x, y, th)
+        medido = f"{d['n']} puntos" + (f", rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else '')
+        aviso = ''
+        if d['aviso_ancho']:
+            aviso = f" AVISO_ANCHO={d['ancho']:.2f}" if d['ancho'] is not None else ' AVISO_ANCHO=sin_lado_lejano'
+        if nivel == '':
+            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f}'
+            self.get_logger().warn(f'Relocalización rechazada: {texto} ({medido})')
+            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {texto}', abs(dx))
+            self.estado = 'GIRAR'
+            return
+        if nivel == 'total':
+            nx, ny, nth = x + dx, y + dy, normalizar(th + dth)
+            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}'
+            self.get_logger().info(f'Relocalización: {texto} ({medido})')
+            self.escribir_log(nx, ny, nth, f'RELOC {texto}', math.hypot(dx, dy))
+        else:
+            nx, ny, nth = x + dx, y, normalizar(th + dth)
+            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f} (dy={dy:+.3f} no aplicado){aviso}'
+            self.get_logger().warn(f'Relocalización parcial: {texto} ({medido})')
+            self.escribir_log(nx, ny, nth, f'RELOC_PARCIAL {texto}', abs(dx))
+        self.fijar_pose(nx, ny, nth)
+        self.obstaculos = {}        # sus posiciones se calcularon con la pose vieja: se vuelven a detectar
+        # Comprobación con el robot aún parado: el mismo ajuste desde la pose corregida debe dar casi 0
+        dx2, dy2, dth2, nivel2, motivo2, _ = self.ajustar_puerta(r, a, nx, ny, nth)
+        mal = (nivel2 == '' or abs(dx2) > self.reloc_comprobar_dist or abs(dth2) > self.reloc_comprobar_ang
+               or (nivel == 'total' and (nivel2 != 'total' or abs(dy2) > self.reloc_comprobar_dist)))
+        if mal:
+            texto = f'{nivel2 or "rechazada"} {motivo2} dx={dx2:+.3f} dy={dy2:+.3f} dth={math.degrees(dth2):+.2f}'
+            self.get_logger().warn(f'Relocalización inconsistente al repetir: {texto}')
+            self.escribir_log(nx, ny, nth, f'RELOC_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
+        self.estado = 'GIRAR'
+
+    def ajustar_puerta(self, r, a, x, y, th):
+        # Lecturas (r, ángulos a) al mundo con la pose (x, y, th) y ajuste_puerta con los parámetros del yaml
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
         ok = ~np.isnan(r)
         px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
         py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
-        dx, dy, dth, nivel, motivo, d = ajuste_puerta(
-            px, py, x, y, self.reloc_pared_x, self.reloc_hueco_y, self.reloc_ancho, self.reloc_tol_ancho,
-            self.reloc_banda, self.reloc_largo, self.reloc_max_rms, self.reloc_min_puntos, self.reloc_min_cercano,
-            self.reloc_max_dist, self.reloc_max_ang)
-        medido = f"{d['n']} puntos" + (f", rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else '')
-        aviso = ''
-        if d['aviso_ancho']:
-            aviso = f" AVISO_ANCHO={d['ancho']:.2f}" if d['ancho'] is not None else ' AVISO_ANCHO=sin_lado_lejano'
-        if nivel == 'total':
-            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}'
-            self.get_logger().info(f'Relocalización: {texto} ({medido})')
-            self.fijar_pose(x + dx, y + dy, normalizar(th + dth))
-            self.obstaculos = {}    # sus posiciones se calcularon con la pose vieja: se vuelven a detectar
-            self.escribir_log(x + dx, y + dy, normalizar(th + dth), f'RELOC {texto}', math.hypot(dx, dy))
-        elif nivel == 'parcial':
-            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f} (dy={dy:+.3f} no aplicado){aviso}'
-            self.get_logger().warn(f'Relocalización parcial: {texto} ({medido})')
-            self.fijar_pose(x + dx, y, normalizar(th + dth))
-            self.obstaculos = {}
-            self.escribir_log(x + dx, y, normalizar(th + dth), f'RELOC_PARCIAL {texto}', abs(dx))
-        else:
-            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f}'
-            self.get_logger().warn(f'Relocalización rechazada: {texto} ({medido})')
-            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {texto}', abs(dx))
-        self.estado = 'GIRAR'
+        return ajuste_puerta(px, py, x, y, self.reloc_pared_x, self.reloc_borde_y, self.reloc_ancho,
+                             self.reloc_tol_ancho, self.reloc_banda, self.reloc_largo, self.reloc_max_rms,
+                             self.reloc_min_puntos, self.reloc_min_cercano, self.reloc_max_dx, self.reloc_max_dy,
+                             self.reloc_max_ang, self.reloc_fondo_marco)
 
     def fijar_pose(self, x, y, th):
         # Que pose_mundo() pase a dar (x, y, th) sin tocar lo integrado desde la salida (x_rel, y_rel, th_rel):
@@ -647,8 +707,8 @@ class Fase1Node(Node):
             self.escribir_log(x, y, th, f'WAYPOINT {nombre}', dist)
             self.i_objetivo += 1
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
-            if nombre in self.reloc_puntos and nombre not in self.reloc_hechas:
-                self.reloc_hechas.add(nombre)
+            # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno replanificado)
+            if self.i_objetivo < len(self.objetivos) and self.objetivos[self.i_objetivo][0] == self.reloc_antes_de:
                 self.reloc_scans_lista = []
                 self.estado = 'RELOC'
                 self.get_logger().info(f'Relocalizo en {nombre}: junto {self.reloc_n} scans parado')

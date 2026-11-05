@@ -166,3 +166,29 @@ pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
 - Hoja en el bag (`hoja_bag.py`, pose corregida): recta en Y 12.08-12.13 (mediana 12.10), X 5.59-6.34.
   Zona `hoja_puerta`: X 5.58-6.34, Y 12.03-12.13. Ruta regenerada (en este PC): E-Door_1 pasa de (5.965, 11.655) a
   (5.915, 11.505); E->Door 6.05 m; total 18.55 m; holgura mínima 0.34 m. Referencia de test_planificador actualizada.
+
+## Calibración de la relocalización en la puerta (en vivo, robot en pose de cinta)
+- Datos del usuario: en la pared de la puerta hay canaleta que acaba justo antes del hueco; desde el eje del robot en
+  (5.96, 11.66, 90°): 0.37 m a la canaleta, 0.43 m al yeso. Bisagras de la hoja en el lado lejano.
+- Vista en vivo (`ventana_vivo.py`): canaleta en X 6.32-6.34 (Y 10.07-11.14), escalón de yeso X 6.35-6.42 (Y 11.14-11.23),
+  lateral del marco X 6.46-6.54 en Y ~11.24, hoja en Y 12.01-12.02 (X 5.59-6.37). Hueco visto 0.77 m.
+- Primer intento: la "pasada a 2 cm" no quitaba el escalón (las pasadas de 10 y 5 cm torcían la recta: dth +2°, X 6.37).
+  Segundo (recta hasta 15 cm antes del marco): bien, pero sin ver el marco una persona en el hueco desviaba dx 3.6 cm, y
+  en vivo a veces el tramo se partía (pocos_puntos). Definitivo: recta de partida = la de más puntos a < 2 cm entre las
+  que pasan por dos puntos (la canaleta), y de ella el tramo continuo más largo; el marco, al final de ese tramo.
+- Calibración (`puerta_vivo2.py`, 3 x 10 scans): X de la canaleta 6.343-6.344 (rumbo de referencia = la pared, que el bag
+  de la ruta 3 da casi paralela a Y; la colocación a mano tenía ~1° de error) y lateral del marco en Y 11.245-11.246.
+  -> reloc_wall_x 6.344, reloc_edge_y 11.245. reloc_min_points 20 (el tramo visible da 22-33 puntos).
+- Prueba (a) sin mover: total, |dx| <= 0.1 cm, |dy| <= 0.2 cm, dth +1.0° (la colocación); al repetir desde la pose
+  corregida, <= 1 mm / 0.03°.
+- Prueba (b), robot movido 10 cm hacia E (cinta), pose creída la de calibración: total, dy -0.102 a -0.105, dx ~ -0.3 a
+  -0.7 cm, dth +2.3° a +2.6° (al moverlo a mano giró). 1 de 6 rechazada por dth (3.06° > 3°).
+  Con la pose verdadera de (b): 5/5 total, dx -0.7 cm, dy -0.5 cm, rms 0.4-0.5 cm.
+
+## Ruta regenerada con hoja_puerta (Y 12.01-12.06) y mesa_pequena (X 5.51-5.90, Y 5.57-6.58)
+- D -> E con un intermedio (5.015, 6.005); E -> Door con (5.115, 7.005) y (5.915, 11.455); total 18.54 m; holgura mínima
+  0.33 m. Distancia mínima de la ruta a la mesa pequeña 0.411 m. Holgura en E 0.43 (era 0.78).
+- La relocalización se activa en el último waypoint antes de Door: ahora E-Door_2 (5.915, 11.455), rumbo de llegada
+  79.8°, a 0.429 m de la canaleta y 0.21 m por encima del marco. Puntos de pared esperados por geometría: 36 (la misma
+  cuenta da 22 y 27 en las posiciones de calibración y (b), donde en vivo hubo 24-25 y 30-33).
+- test_planificador: referencias actualizadas y justificadas (holgura en E, D->E con intermedio, E->Door con dos).

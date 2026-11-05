@@ -40,8 +40,9 @@ def ruta(datos):
     return pf.planificar(p, h1, meta1, h5, meta5, secuencia(puntos, ['A', 'B', 'D', 'E', 'Door', 'Q']), 0.25)
 
 
+# E: 0.78 hasta el 05/11; con la zona mesa_pequena (la mesa entera, a 0.43 m de E hacia los armarios) es 0.43.
 @pytest.mark.parametrize('nombre, esperada', [
-    ('A', 0.71), ('B', 1.13), ('C', 2.08), ('D', 0.58), ('E', 0.78), ('F', 0.68), ('G', 0.86),
+    ('A', 0.71), ('B', 1.13), ('C', 2.08), ('D', 0.58), ('E', 0.43), ('F', 0.68), ('G', 0.86),
     ('Door', 0.36), ('Q', 0.56), ('R', 0.73), ('S', 1.36), ('T', 0.55), ('Base', 0.15)])
 def test_holgura_1cm(datos, nombre, esperada):
     p, h1, meta1, h5, meta5, puntos = datos
@@ -67,20 +68,30 @@ def test_base_bloqueada_con_inflado_020(datos):
     assert pl.holgura_en(h5, meta5, *puntos['Base']) <= 0.20
 
 
-@pytest.mark.parametrize('k, longitud', [(0, 2.53), (1, 2.32), (2, 3.61)])
+@pytest.mark.parametrize('k, longitud', [(0, 2.53), (1, 2.32)])
 def test_tramos_rectos(ruta, k, longitud):
     na, nb, puntos, lon, _, _ = ruta[k]
     assert lon == pytest.approx(longitud, abs=TOL_LONGITUD)
     assert len(puntos) == 2, f'{na}->{nb} debería ser recto: {puntos}'
 
 
+def test_tramo_D_E(ruta):
+    # Hasta el 05/11 era recto (3.61 m). Con la zona mesa_pequena, rodea la mesa con un punto antes de E.
+    _, _, puntos, lon, _, _ = ruta[2]
+    assert lon == pytest.approx(3.61, abs=TOL_LONGITUD)
+    assert len(puntos) == 3
+    assert math.dist(puntos[1], (5.015, 6.005)) < TOL_PUNTO
+
+
 def test_tramo_E_Door(ruta):
     _, _, puntos, lon, _, _ = ruta[3]
     assert lon == pytest.approx(6.13, abs=TOL_LONGITUD)
-    assert len(puntos) == 3
-    # Referencia actualizada el 05/11: con la zona hoja_puerta (hoja abierta hacia la sala, en el borde lejano)
-    # el punto intermedio se aleja de ella 16 cm hacia el borde cercano. Antes: (5.96, 11.66).
-    assert math.dist(puntos[1], (5.915, 11.505)) < TOL_PUNTO
+    # Referencias actualizadas el 05/11. Antes: un solo intermedio en (5.96, 11.66). Con hoja_puerta (la hoja
+    # abierta hacia la sala, en el borde lejano) el de antes de la puerta se aleja 16-20 cm hacia el borde cercano;
+    # con mesa_pequena aparece otro al salir de E, bordeando la mesa.
+    assert len(puntos) == 4
+    assert math.dist(puntos[1], (5.115, 7.005)) < TOL_PUNTO
+    assert math.dist(puntos[2], (5.915, 11.455)) < TOL_PUNTO
 
 
 def test_tramo_Door_Q(ruta):

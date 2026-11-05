@@ -67,22 +67,31 @@ fase1_node:
     pose_heading_axis: "Y"       # comprobar_pose: el rumbo sale solo de las caras de este eje ("Y" = pared izquierda,
                                  #   y = 0.04); la posición, de todas. Las dos paredes de A difieren 1.76° (05/11). "" = todas
 
-    # ---------- Relocalización con la pared de la puerta (robot parado): rumbo y X de la recta, Y del borde cercano ----------
-    reloc_waypoints: ["E-Door_1"] # al llegar a estos waypoints (una vez cada uno). Antes de la puerta: 05/11 llegó con 14 cm de error
+    # ---------- Relocalización con la pared de la puerta (robot parado): rumbo y X de la recta, Y del lateral del marco ----------
+    reloc_before: "Door"         # se relocaliza al llegar al último waypoint antes de este (sea cual sea su nombre)
     reloc_scans: 10              # scans que se juntan (mediana): a 5 Hz, unos 2 s parado
-    reloc_wall_x: 6.39           # m: X de la pared de la puerta (lado sala) para relocalizar. Mapa: 6.34 (el planificador
-                                 #   la sigue usando: conservador). Medido 05/11 desde G (0.91 m) y la sala (5.91 m): ~6.39
-    reloc_door_y: [11.27, 12.02] # m: bordes del hueco en el mapa (medidos desde G: coinciden). La Y usa el primero (cercano)
-    reloc_door_width: 0.76       # m: ancho medido del hueco. Solo AVISO (la hoja abierta hacia la sala tapa el lado lejano);
-                                 #   la Y sale del borde cercano (11.27)
-    reloc_door_width_tol: 0.06   # m: LiDAR de 1° a ~1 m: ~1.7 cm por borde
-    reloc_band: 0.35             # m: puntos a menos de esto de x = reloc_wall_x con la pose creída (tolera 0.30 m de error)
-    reloc_wall_length: 1.0       # m de pared que se usan a cada lado del hueco
-    reloc_max_rms: 0.02          # m: residuo máximo de la recta de pared para aceptar la corrección
-    reloc_min_points: 30         # puntos de pared mínimos (los dos lados del hueco)
-    reloc_min_points_near: 10    # puntos mínimos del tramo de pared del lado cercano (11.27) para corregir la Y
-    reloc_max_dist: 0.30         # m: corrección de posición máxima; más, se rechaza (RELOC_RECHAZADA dxy)
+    # CALIBRACIÓN (05/11, robot en (5.96, 11.66, 90°) medido con cinta: 0.37 m a la canaleta, 0.43 m al yeso):
+    reloc_wall_x: 6.344          # m: X a la que el LiDAR ve la pared de la puerta (la canaleta; el yeso está en ~6.39).
+                                 #   Calibrada: 6.343-6.344 en 3 medidas (puntos girados para que la pared vaya en Y)
+    reloc_edge_y: 11.245         # m: Y del lateral del marco del borde cercano del hueco (el mapa dice 11.27).
+                                 #   Calibrada: 11.245-11.246 en 3 medidas. Hueco visto 0.774 m. Rumbo: el de la pared (la
+                                 #   colocación a mano tenía ~1° de error; el bag de la ruta 3 dice pared casi paralela a Y)
+    reloc_door_width: 0.76       # m: ancho medido del hueco. Solo AVISO (la hoja abierta hacia la sala, con las bisagras en
+                                 #   el borde lejano, tapa ese lado)
+    reloc_door_width_tol: 0.06   # m
+    reloc_band: 0.35             # m: puntos a menos de esto de x = reloc_wall_x con la pose creída
+    reloc_wall_length: 1.0       # m de pared antes del borde cercano que se usan
+    reloc_frame_depth: 0.08      # m: el lateral del marco son puntos más de esto por detrás de la recta (el escalón de yeso
+                                 #   entre el final de la canaleta y el marco queda a ~6 cm)
+    reloc_max_rms: 0.02          # m: residuo máximo de la recta (el tramo continuo más largo a < 2 cm: la canaleta)
+    reloc_min_points: 20         # puntos de pared mínimos en la recta. Desde E-Door_1 el tramo visible da ~22-28 rayos
+                                 #   (05/11); con la mediana de 10 scans, rumbo a ~0.2-0.3°
+    reloc_min_points_near: 10    # puntos de pared mínimos en los 0.5 m antes del borde (borde creíble)
+    reloc_max_dx: 0.30           # m: corrección de X máxima; más, no se corrige nada (RELOC_RECHAZADA dx)
+    reloc_max_dy: 0.45           # m: corrección de Y máxima; más, solo X y rumbo (RELOC_PARCIAL dy). Ruta 3: -0.20 a -0.28
     reloc_max_angle_deg: 3.0     # grados: corrección de rumbo máxima
+    reloc_check_dist: 0.03       # m: al repetir el ajuste tras corregir, |dx| y |dy| deben quedar por debajo
+    reloc_check_angle_deg: 0.5   # grados: ídem para el rumbo (si no, RELOC_INCONSISTENTE)
 
     # ---------- Log ----------
     log_file: "mission_log.csv"
@@ -114,10 +123,12 @@ fase1_node:
     # ESTIMADAS desde la figura del enunciado: hay que medirlas en el laboratorio.
     # TODO: añadir las mesas entre B y C (zona 1) cuando estén medidas.
     # hoja_puerta: la hoja abierta del todo hacia la sala, perpendicular al hueco, con las bisagras en el borde lejano
-    #   (Y ~ 12.03). Vista en el bag del 05/11 en Y 12.08-12.13, X 5.59-6.34 (0.75 m). El LiDAR la ve, pero tapa el
+    #   (Y ~ 12.03). Vista en vivo el 05/11 (robot en pose de cinta) en Y 12.01-12.02, X 5.59-6.37. El LiDAR la ve, pero tapa el
     #   lado lejano del hueco; no se usa para relocalizar.
-    nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta"]
-    nogo_x_min: [8.05, -0.55, 5.58]
-    nogo_x_max: [8.72, 4.59, 6.34]
-    nogo_y_min: [11.79, 15.85, 12.03]
-    nogo_y_max: [12.95, 16.90, 12.13]
+    # mesa_pequena: la mesa pequeña del lado de los armarios, junto a E, entera (tablero visto desde arriba, hasta los
+    #   armarios). Medida desde la cruz de E el 05/11: los dos tubos a 0.43 m de E hacia los armarios.
+    nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta", "mesa_pequena"]
+    nogo_x_min: [8.05, -0.55, 5.58, 5.51]
+    nogo_x_max: [8.72, 4.59, 6.34, 5.90]
+    nogo_y_min: [11.79, 15.85, 12.01, 5.57]
+    nogo_y_max: [12.95, 16.90, 12.06, 6.58]

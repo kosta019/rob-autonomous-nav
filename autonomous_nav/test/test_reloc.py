@@ -1,7 +1,8 @@
 # Test sin robot de la relocalización con la pared de la puerta (ajuste_puerta de fase1_node).
-# Los puntos son SINTÉTICOS: rayos del LiDAR desde una pose conocida contra la recta x = 6.39 con el hueco de la
-# puerta (y, si se pide, la hoja abierta), pasados al mundo con una pose creída errónea (como los ve el nodo).
-# No simula el robot: comprueba que el algoritmo recupera la corrección y el nivel (total / parcial / nada).
+# Los puntos son SINTÉTICOS: rayos del LiDAR (1 por grado) desde una pose conocida contra la geometría vista en vivo
+# el 05/11 (canaleta, escalón de yeso, lateral del marco, pared lejana y hoja de la puerta), pasados al mundo con una
+# pose creída errónea, como los ve el nodo. No simula el robot: comprueba que el algoritmo recupera la corrección,
+# el nivel (total / parcial / nada) y que al repetir desde la pose corregida sale ~0.
 # Uso (con ROS cargado):  python3 -m pytest autonomous_nav/test/test_reloc.py -v
 import math
 import os
@@ -15,40 +16,46 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 from autonomous_nav.fase1_node import ajuste_puerta  # noqa: E402
 
-X_PARED = 6.39
-HUECO = (11.265, 12.025)            # 0.76 m, como el medido
-OFF = -0.032                        # lidar_offset_x
-REAL = (5.915, 11.505, math.radians(81.0))   # en E-Door_1 (con la zona hoja_puerta), llegando desde E
-PARAM = dict(x_pared=X_PARED, y_hueco=(11.27, 12.02), ancho=0.76, tol_ancho=0.06, banda=0.35, largo=1.0,
-             max_rms=0.02, min_puntos=30, min_cercano=10, max_dist=0.30, max_ang=math.radians(3.0))
+OFF = -0.032                                   # lidar_offset_x
+REAL = (5.915, 11.455, math.radians(79.8))     # último punto antes de Door (E-Door_2), llegando desde E-Door_1
+PARAM = dict(x_pared=6.344, y_borde=11.245, ancho=0.76, tol_ancho=0.06, banda=0.35, largo=1.0, max_rms=0.02,
+             min_puntos=20, min_cercano=10, max_dx=0.30, max_dy=0.45, max_ang=math.radians(3.0),
+             fondo_marco=0.08)
+
+# Geometría vista en vivo (segmentos en el mundo)
+MARCO_CERCANO = ((6.39, 11.245), (6.55, 11.245))
+PARED = [((6.344, 10.07), (6.344, 11.14)),     # canaleta del lado cercano
+         ((6.344, 11.14), (6.39, 11.14)),      # final de la canaleta
+         ((6.39, 11.14), (6.39, 11.245)),      # escalón de yeso
+         MARCO_CERCANO,                        # lateral del marco (borde cercano)
+         ((6.55, 12.015), (6.39, 12.015)),     # lateral del marco (borde lejano): hueco de 0.77 m
+         ((6.344, 12.02), (6.344, 12.37))]     # canaleta del lado lejano
+HOJA = [((5.59, 12.015), (6.344, 12.015))]     # hoja abierta hacia la sala, bisagras en el borde lejano
+PERSONA = [((6.30, 11.40), (6.40, 11.40)), ((6.40, 11.40), (6.40, 11.55)),
+           ((6.40, 11.55), (6.30, 11.55)), ((6.30, 11.55), (6.30, 11.40))]   # alguien en el hueco
 
 
-def puntos(real, creida, hueco=HUECO, hoja=None, ruido=0.0, semilla=0):
-    # Rayos cada 1° desde el LiDAR en la pose real contra la pared con el hueco y, si se pide, la hoja de la puerta
-    # (0.7 m, perpendicular a la pared): 'sala_lejano' (bisagras en el borde lejano, abierta hacia la sala: como la
-    # real) o 'sala_cercano' (en el borde cercano, hacia la sala).
-    # Devuelve los puntos vistos con la pose creída: P_creído = r_creído + R(e) (P - r_real), e = th_creído - th_real.
+def puntos(real, creida, segmentos=PARED, ruido=0.0, semilla=0):
+    # Rayo cada 1° desde el LiDAR en la pose real; el impacto más cercano con los segmentos (hasta 3.5 m), visto
+    # con la pose creída: P_creído = r_creído + R(e) (P - r_real), con e = th_creído - th_real.
     xr, yr, thr = real
     lx, ly = xr + OFF * math.cos(thr), yr + OFF * math.sin(thr)
-    y_hoja = hueco[1] if hoja == 'sala_lejano' else hueco[0]
-    x0, x1 = X_PARED - 0.7, X_PARED
     rng = np.random.default_rng(semilla)
     pts = []
     for ang in thr + np.radians(np.arange(360)):
         c, s = math.cos(ang), math.sin(ang)
-        t = []
-        if abs(c) > 1e-9:
-            tp = (X_PARED - lx) / c
-            yp = ly + tp * s
-            if tp > 0 and not (hueco[0] < yp < hueco[1]):
-                t.append(tp)
-        if hoja and abs(s) > 1e-9:
-            th_ = (y_hoja - ly) / s
-            xh = lx + th_ * c
-            if th_ > 0 and x0 < xh < x1:
-                t.append(th_)
-        if t and min(t) < 3.5:
-            d = min(t) + rng.normal(0.0, ruido)
+        mejor = None
+        for (x1, y1), (x2, y2) in segmentos:
+            ex, ey = x2 - x1, y2 - y1
+            den = c * ey - s * ex
+            if abs(den) < 1e-12:
+                continue
+            t = ((x1 - lx) * ey - (y1 - ly) * ex) / den          # distancia a lo largo del rayo
+            u = ((x1 - lx) * s - (y1 - ly) * c) / den            # posición en el segmento (0..1)
+            if t > 0 and 0.0 <= u <= 1.0 and (mejor is None or t < mejor):
+                mejor = t
+        if mejor is not None and mejor < 3.5:
+            d = mejor + rng.normal(0.0, ruido)
             pts.append((lx + d * c, ly + d * s))
     p = np.array(pts)
     e = creida[2] - real[2]
@@ -62,8 +69,8 @@ def creida(dx, dy, dth_grados, real=REAL):
     return (real[0] + dx, real[1] + dy, real[2] + math.radians(dth_grados))
 
 
-def ajustar(c, **kw):
-    px, py = puntos(REAL, c, **kw)
+def ajustar(c, real=REAL, **kw):
+    px, py = puntos(real, c, **kw)
     return ajuste_puerta(px, py, c[0], c[1], **PARAM)
 
 
@@ -74,48 +81,62 @@ def bien(r, dx, dy, dth_grados, tol=0.015, tol_grados=0.2):
 # ---------- Corrección total ----------
 
 def test_recupera_el_error_de_la_ruta_3():
-    # Como el 05/11 delante de la puerta: ~14 cm en X, ~20 cm en Y y ~1° de rumbo
+    # ~14 cm en X, ~20 cm en Y y ~1° de rumbo; el escalón de yeso y el lateral del marco no tuercen la recta
     r = ajustar(creida(-0.137, -0.20, 0.9))
     assert r[3] == 'total' and bien(r, 0.137, 0.20, -0.9)
-    assert not r[5]['aviso_ancho']
 
 
-def test_hoja_abierta_hacia_la_sala_en_el_lado_lejano():
-    # Como la real: tapa el tramo de pared del lado lejano. La Y sale del lado cercano: corrección total.
-    r = ajustar(creida(-0.10, 0.12, -0.5), hoja='sala_lejano')
+def test_con_la_hoja_abierta():
+    r = ajustar(creida(-0.10, 0.12, -0.5), segmentos=PARED + HOJA)
     assert r[3] == 'total' and bien(r, 0.10, -0.12, 0.5)
 
 
+def test_robot_movido_10_cm_hacia_E():
+    # Como la prueba en vivo (b): el robot está 10 cm más hacia -Y de lo que cree
+    r = ajustar(creida(0.0, 0.10, 0.0))
+    assert r[3] == 'total' and bien(r, 0.0, -0.10, 0.0)
+
+
 def test_ruido_de_1_cm():
-    # El rumbo sale solo del tramo cercano (~35 puntos en ~1 m): con 1 cm de ruido, sigma de la pendiente
-    # ~ 1 cm / (raíz(35) * 0.3 m) ~ 0.17°, así que se admiten 0.4° (2 sigma). En el bag real el rms fue ~0.65 cm.
+    # ~30-36 puntos en ~1 m de canaleta: con 1 cm de ruido la pendiente tiene sigma ~0.2°; se admiten 0.5°.
+    # En vivo el rms fue ~0.5 cm.
     r = ajustar(creida(0.05, -0.05, 0.3), ruido=0.01)
-    assert r[3] == 'total' and bien(r, -0.05, 0.05, -0.3, tol=0.02, tol_grados=0.4)
+    assert r[3] == 'total' and bien(r, -0.05, 0.05, -0.3, tol=0.02, tol_grados=0.5)
 
 
-def test_hueco_estrecho_solo_avisa():
-    # Riesgo aceptado: el ancho es solo un aviso. Hueco de 0.50 m con el borde cercano en 11.40 (13 cm más allá):
-    # la Y se corrige mal (13 cm) y lo único que lo delata es el aviso de ancho.
-    r = ajustar(creida(0.05, 0.05, 0.0), hueco=(11.40, 11.90))
-    assert r[3] == 'total' and r[5]['aviso_ancho']
+def test_repetir_desde_la_pose_corregida_da_cero():
+    # Lo que hace el nodo tras corregir (si no, RELOC_INCONSISTENTE): |dx|, |dy| < 3 cm y |dth| < 0.5°
+    c = creida(-0.137, -0.20, 0.9)
+    r = ajustar(c)
+    r2 = ajustar((c[0] + r[0], c[1] + r[1], c[2] + r[2]))
+    assert r2[3] == 'total' and abs(r2[0]) < 0.03 and abs(r2[1]) < 0.03 and abs(math.degrees(r2[2])) < 0.5
 
 
 # ---------- Corrección parcial (dx y dth sí, dy no) ----------
 
-def test_puerta_cerrada():
-    r = ajustar(creida(0.05, 0.05, 0.0), hueco=(0.0, 0.0))
-    assert r[3] == 'parcial' and r[4] == 'dy'
+def test_alguien_en_el_hueco():
+    # Algo sobre la línea de pared justo después del borde: no se fía de la Y. Según dónde esté, el tramo de pared
+    # se alarga hasta ello y el marco no aparece ('sin_borde') o aparece con algo detrás ('borde').
+    r = ajustar(creida(-0.05, 0.05, 0.0), segmentos=PARED + PERSONA)
+    assert r[3] == 'parcial' and r[4] in ('borde', 'sin_borde')
+    assert abs(r[0] - 0.05) < 0.015
+
+
+def test_marco_no_visible():
+    # Sin el lateral del marco (tapado): no hay borde
+    r = ajustar(creida(-0.05, 0.05, 0.0), segmentos=[s for s in PARED if s != MARCO_CERCANO])
+    assert r[3] == 'parcial' and r[4] == 'sin_borde'
 
 
 def test_error_de_y_demasiado_grande():
-    r = ajustar(creida(0.0, -0.33, 0.0))
-    assert r[3] == 'parcial' and r[4] == 'dy' and abs(r[0]) < 0.015
+    # 0.50 m de error en Y: no se acepta la Y (o, si la ventana ya no contiene el borde, ni siquiera la recta)
+    r = ajustar(creida(0.0, 0.50, 0.0))
+    assert r[3] != 'total' and r[4] != ''
 
 
 # ---------- Rechazo (la recta no es fiable: nada) ----------
 
 def test_sin_pared_clara():
-    # Una nube de puntos en la banda (sillas, personas) en lugar de la pared: no se corrige nada
     rng = np.random.default_rng(3)
     px = rng.uniform(6.05, 6.70, 200)
     py = rng.uniform(10.0, 12.5, 200)
@@ -126,11 +147,11 @@ def test_sin_pared_clara():
 def test_pocos_puntos():
     c = creida(0.05, 0.05, 0.0)
     px, py = puntos(REAL, c)
-    assert ajuste_puerta(px[:20], py[:20], c[0], c[1], **PARAM)[3:5] == ('', 'pocos_puntos')
+    assert ajuste_puerta(px[:15], py[:15], c[0], c[1], **PARAM)[3:5] == ('', 'pocos_puntos')
 
 
 def test_error_de_x_demasiado_grande():
-    assert ajustar(creida(-0.33, 0.0, 0.0))[3:5] == ('', 'dxy')
+    assert ajustar(creida(-0.33, 0.0, 0.0))[3:5] == ('', 'dx')
 
 
 def test_error_de_rumbo_demasiado_grande():

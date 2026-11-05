@@ -140,12 +140,12 @@ La solución definitiva es el paso 2 con las mesas dibujadas como zona prohibida
 
 | Comprobación | Valor esperado |
 |---|---|
-| Holgura a 1 cm (con zonas prohibidas) en A, B, C, D, E, F, G | 0.71, 1.13, 2.08, 0.58, 0.78, 0.68, 0.86 m |
+| Holgura a 1 cm (con zonas prohibidas) en A, B, C, D, E, F, G | 0.71, 1.13, 2.08, 0.58, 0.78, 0.68, 0.86 m. **Desde el 05/11, con `mesa_pequena`: E 0.43** |
 | Holgura en Door, Q, R, S, T, P Base | 0.36, 0.56, 0.73, 1.36, 0.55, **0.15** m (con el suelo irregular estimado, P Base queda bloqueado con un inflado de 0.20 o más: es un problema de la fase II, no de la I) |
 | Inflado 0.30 | Todos los puntos de la fase I libres |
 | Inflado 0.33 | **Door bloqueado** |
-| Tramos A→B, B→D, D→E | 2.53, 2.32 y 3.61 m, rectos, sin puntos intermedios |
-| Tramo E→Door | 6.13 m, con un punto intermedio cerca de (5.96, 11.66). **Desde el 05/11, con la zona `hoja_puerta`: 6.05 m y (5.915, 11.505)** |
+| Tramos A→B, B→D, D→E | 2.53, 2.32 y 3.61 m, rectos, sin puntos intermedios. **Desde el 05/11: D→E 3.63 m con un intermedio en (5.015, 6.005), que rodea la mesa pequeña** |
+| Tramo E→Door | 6.13 m, con un punto intermedio cerca de (5.96, 11.66). **Desde el 05/11, con `hoja_puerta` y `mesa_pequena`: 6.02 m, intermedios (5.115, 7.005) y (5.915, 11.455)** |
 | Tramo Door→Q | 4.09 m, con puntos cerca de (7.42, 12.36) y (7.96, 14.16) |
 | Total A→Q | **18.7 m**, holgura mínima ≈ 0.34 m (en la puerta) |
 | Ruta directa A→E→Door→Q, sin pasar por B y D | 17.0 m (cruza las mesas; solo sirve para comparar) |
