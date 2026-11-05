@@ -154,3 +154,15 @@ pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
 - Validación con el bag (`reloc_puerta_bag.py`, robot parado 0.6 m antes de E-Door_1, 15:52-15:53, 5 ventanas):
   dx +0.183 (13.7 cm + los 5 cm de la referencia 6.39), dth +0.8° a +1.35°, rms ~1 cm, pero dy -0.33 y hueco
   0.84-0.86 m -> RECHAZADA ancho las 5 veces. La salvaguarda funciona; falta probar desde E-Door_1 (de frente).
+
+## Relocalización: Y del borde cercano y corrección parcial; zona de la hoja de la puerta
+- La hoja de la puerta está abierta del todo hacia la sala, perpendicular al hueco, con las bisagras (según la figura)
+  en el borde lejano (Y ~ 12.03): tapa el tramo de pared del lado lejano (por eso el hueco salía de 0.84-0.86 m).
+- `ajuste_puerta`: la recta (rumbo y X) solo con el tramo de pared CERCANO (hasta 11.27 + 0.40): la hoja, perpendicular
+  y a ~0.4 m de E-Door_1, torcía la recta (test sintético: 4.8°). Y del borde cercano (11.27). Ancho del hueco: solo
+  aviso. Niveles: total (dx, dy, dth), parcial (dx, dth; motivos sin_borde, dy) o nada (pocos_puntos, residuo, dxy, dth).
+- Bag de la ruta 3 (0.6 m antes de E-Door_1): PARCIAL dy en 3 ventanas: dx +0.185, dth +0.33°, rms ~0.65 cm; borde
+  cercano en 11.55 (creído) -> dy -0.28 no aplicado (|dxy| 0.34 > 0.30).
+- Hoja en el bag (`hoja_bag.py`, pose corregida): recta en Y 12.08-12.13 (mediana 12.10), X 5.59-6.34.
+  Zona `hoja_puerta`: X 5.58-6.34, Y 12.03-12.13. Ruta regenerada (en este PC): E-Door_1 pasa de (5.965, 11.655) a
+  (5.915, 11.505); E->Door 6.05 m; total 18.55 m; holgura mínima 0.34 m. Referencia de test_planificador actualizada.

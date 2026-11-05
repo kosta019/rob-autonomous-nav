@@ -145,7 +145,7 @@ La solución definitiva es el paso 2 con las mesas dibujadas como zona prohibida
 | Inflado 0.30 | Todos los puntos de la fase I libres |
 | Inflado 0.33 | **Door bloqueado** |
 | Tramos A→B, B→D, D→E | 2.53, 2.32 y 3.61 m, rectos, sin puntos intermedios |
-| Tramo E→Door | 6.13 m, con un punto intermedio cerca de (5.96, 11.66) |
+| Tramo E→Door | 6.13 m, con un punto intermedio cerca de (5.96, 11.66). **Desde el 05/11, con la zona `hoja_puerta`: 6.05 m y (5.915, 11.505)** |
 | Tramo Door→Q | 4.09 m, con puntos cerca de (7.42, 12.36) y (7.96, 14.16) |
 | Total A→Q | **18.7 m**, holgura mínima ≈ 0.34 m (en la puerta) |
 | Ruta directa A→E→Door→Q, sin pasar por B y D | 17.0 m (cruza las mesas; solo sirve para comparar) |

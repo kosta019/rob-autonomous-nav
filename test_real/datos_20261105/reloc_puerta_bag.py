@@ -24,9 +24,9 @@ rr = cp.mediana_de_scans(lista); ang = m.angle_min + np.arange(len(rr)) * m.angl
 lx, ly = x + cfg['lidar_offset_x'] * math.cos(th), y + cfg['lidar_offset_x'] * math.sin(th)
 ok = ~np.isnan(rr)
 px, py = lx + rr[ok] * np.cos(th + cfg['lidar_yaw_offset'] + ang[ok]), ly + rr[ok] * np.sin(th + cfg['lidar_yaw_offset'] + ang[ok])
-dx, dy, dth, motivo, d = ajuste_puerta(px, py, x, y, cfg['reloc_wall_x'], cfg['reloc_door_y'], cfg['reloc_door_width'],
-    cfg['reloc_door_width_tol'], cfg['reloc_band'], cfg['reloc_wall_length'], cfg['reloc_max_rms'], cfg['reloc_min_points'],
+dx, dy, dth, nivel, motivo, d = ajuste_puerta(px, py, x, y, cfg['reloc_wall_x'], cfg['reloc_door_y'], cfg['reloc_door_width'],
+    cfg['reloc_door_width_tol'], cfg['reloc_band'], cfg['reloc_wall_length'], cfg['reloc_max_rms'], cfg['reloc_min_points'], cfg['reloc_min_points_near'],
     cfg['reloc_max_dist'], math.radians(cfg['reloc_max_angle_deg']))
 rms = f"{d['rms']*100:.2f} cm" if d['rms'] is not None else '-'
-anc = f"{d['ancho']:.3f} m" if d['ancho'] is not None else '-'
-print(f"{sys.argv[2]}: dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}°  {d['n']} puntos, rms {rms}, hueco {anc}  -> {'ACEPTADA' if motivo == '' else 'RECHAZADA ' + motivo}")
+print(f"{sys.argv[2]}: {nivel or 'RECHAZADA'} {motivo} dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}°  {d['n']} puntos, rms {rms}, "
+      f"borde cercano {d['y1']} lejano {d['y2']} ancho {d['ancho']} aviso {d['aviso_ancho']}")

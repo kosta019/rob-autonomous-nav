@@ -52,52 +52,69 @@ def rayos_libres(rayos, d, margen, dist_min_cero):
 
 
 def ajuste_puerta(px, py, rx, ry, x_pared, y_hueco, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
-                  max_dist, max_ang):
-    # Relocalización con la pared de la puerta (lado sala), en el robot parado. px, py: puntos del scan pasados al
+                  min_cercano, max_dist, max_ang):
+    # Relocalización con la pared de la puerta (lado sala), con el robot parado. px, py: puntos del scan pasados al
     # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. La pared real es la recta x = x_pared con el
-    # hueco de la puerta entre y_hueco[0] e y_hueco[1].
-    # - Rumbo y X: ajuste de la recta x = a + b*y con los puntos de los dos lados del hueco.
-    # - Y: los extremos del hueco (donde la línea de pared se corta y donde vuelve a empezar), no otras caras.
-    # Devuelve (dx, dy, dth, motivo, datos): la corrección a sumar a la pose creída, '' si se acepta o el motivo
-    # del rechazo, y un diccionario con lo medido (para el log).
-    sel = ((np.abs(px - x_pared) < banda) & (py > y_hueco[0] - largo) & (py < y_hueco[1] + largo))
+    # hueco de la puerta entre y_hueco[0] (lado cercano, el de E) e y_hueco[1].
+    # 1. Rumbo y X: recta x = a + b*y con los puntos de la pared a los dos lados del hueco.
+    # 2. Y: el borde CERCANO del hueco (siempre se ve desde E-Door_1; el lejano lo tapa la hoja de la puerta abierta).
+    #    El ancho del hueco es solo un aviso.
+    # Devuelve (dx, dy, dth, nivel, motivo, datos): la corrección a sumar a la pose creída; nivel 'total' (dx, dy,
+    # dth), 'parcial' (solo dx y dth: la Y no es fiable) o '' (nada: la recta no es fiable); motivo; y lo medido.
+    # La recta se ajusta SOLO con el tramo de pared cercano (hasta y_hueco[0] + max_dist + 0.10): la hoja de la
+    # puerta abierta hacia la sala (en el borde lejano, perpendicular a la pared y muy cerca de E-Door_1) no puede
+    # entrar, ni siquiera junto a la bisagra (con ~1 m de brazo torcería el rumbo). En dos pasadas, quitando lo que
+    # queda lejos (10 y 5 cm); el residuo se mide con lo que queda a < 5 cm (recortar más haría que una pared con
+    # mucho ruido pareciera limpia).
+    en_banda = np.abs(px - x_pared) < banda
+    tope = y_hueco[0] + max_dist + 0.10
+    sel = en_banda & (py > y_hueco[0] - largo - max_dist) & (py < tope)
     x, y = px[sel], py[sel]
-    datos = {'n': int(len(x)), 'rms': None, 'ancho': None}
+    datos = {'n': int(len(x)), 'rms': None, 'ancho': None, 'y1': None, 'y2': None, 'aviso_ancho': False}
     if len(x) < min_puntos:
-        return 0.0, 0.0, 0.0, 'pocos_puntos', datos
-    # Recta en dos pasadas, quitando cada vez lo que queda lejos (hoja de la puerta, una persona...). El residuo se
-    # mide con lo que queda a < 5 cm: recortar más haría que una pared con mucho ruido pareciera limpia.
+        return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
     for umbral in (0.10, 0.05):
         b, a = np.polyfit(y, x, 1)
         cerca = np.abs(x - (a + b * y)) < umbral
         x, y = x[cerca], y[cerca]
         datos['n'] = int(len(x))
         if len(x) < min_puntos:
-            return 0.0, 0.0, 0.0, 'pocos_puntos', datos
+            return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
     b, a = np.polyfit(y, x, 1)
     datos['rms'] = float(np.sqrt(np.mean((x - (a + b * y)) ** 2)))
-    # Error de rumbo: la recta debería ir exactamente en dirección Y. Se corrige girando los puntos alrededor del
-    # robot (así su posición no cambia con el giro).
+    # Rumbo: la recta debería ir exactamente en dirección Y. Se corrige girando los puntos alrededor del robot
+    # (así su posición no cambia con el giro); después, la X.
     dth = math.atan(b)
     c, s = math.cos(dth), math.sin(dth)
     xr = rx + c * (x - rx) - s * (y - ry)
     yr = ry + s * (x - rx) + c * (y - ry)
     dx = x_pared - float(np.mean(xr))
-    # El hueco: el salto mayor entre puntos consecutivos de la pared, ordenados por y
-    ys = np.sort(yr)
-    k = int(np.argmax(np.diff(ys)))
-    y1, y2 = float(ys[k]), float(ys[k + 1])
-    datos['ancho'] = y2 - y1
-    dy = (y_hueco[0] + y_hueco[1]) / 2.0 - (y1 + y2) / 2.0
     if datos['rms'] > max_rms:
-        return dx, dy, dth, 'residuo', datos      # la recta no es buena: el hueco tampoco
-    if abs(datos['ancho'] - ancho) > tol_ancho:
-        return dx, dy, dth, 'ancho', datos        # no se ve un hueco como la puerta
-    if math.hypot(dx, dy) > max_dist:
-        return dx, dy, dth, 'dxy', datos
+        return dx, 0.0, dth, '', 'residuo', datos
+    if abs(dx) > max_dist:
+        return dx, 0.0, dth, '', 'dxy', datos
     if abs(dth) > max_ang:
-        return dx, dy, dth, 'dth', datos
-    return dx, dy, dth, '', datos
+        return dx, 0.0, dth, '', 'dth', datos
+    # Borde cercano: final del primer tramo continuo de pared, subiendo en y (un salto de más de medio ancho de puerta
+    # es el hueco; los saltos pequeños, p. ej. la pata de una silla, no cortan el tramo)
+    ys = np.sort(yr)
+    grandes = np.where(np.diff(ys) > 0.5 * ancho)[0]
+    k = int(grandes[0]) if len(grandes) else len(ys) - 1
+    datos['y1'] = float(ys[k])
+    # Ancho del hueco, solo como aviso: hasta el primer punto de pared al otro lado (a < 3 cm de la recta), si se ve
+    lejos = en_banda & (py >= tope) & (py < y_hueco[1] + largo) & (np.abs(px - (a + b * py)) < 0.03)
+    yl = ry + s * (px[lejos] - rx) + c * (py[lejos] - ry)
+    yl = yl[yl > datos['y1'] + 0.5 * ancho]
+    if len(yl):
+        datos['y2'] = float(yl.min())
+        datos['ancho'] = datos['y2'] - datos['y1']
+    datos['aviso_ancho'] = datos['ancho'] is None or abs(datos['ancho'] - ancho) > tol_ancho
+    dy = y_hueco[0] - datos['y1']
+    if k + 1 < min_cercano:
+        return dx, dy, dth, 'parcial', 'sin_borde', datos   # el tramo cercano no se ve (tapado)
+    if math.hypot(dx, dy) > max_dist:
+        return dx, dy, dth, 'parcial', 'dy', datos          # el borde no está donde debería: no se fía de la Y
+    return dx, dy, dth, 'total', '', datos
 
 class Fase1Node(Node):
     def __init__(self):
@@ -142,6 +159,7 @@ class Fase1Node(Node):
         self.reloc_largo = self.declare_parameter('reloc_wall_length', D).value
         self.reloc_max_rms = self.declare_parameter('reloc_max_rms', D).value
         self.reloc_min_puntos = self.declare_parameter('reloc_min_points', Parameter.Type.INTEGER).value
+        self.reloc_min_cercano = self.declare_parameter('reloc_min_points_near', Parameter.Type.INTEGER).value
         self.reloc_max_dist = self.declare_parameter('reloc_max_dist', D).value
         self.reloc_max_ang = math.radians(self.declare_parameter('reloc_max_angle_deg', D).value)
         self.usar_imu = self.declare_parameter('use_imu_yaw', Parameter.Type.BOOL).value
@@ -488,7 +506,7 @@ class Fase1Node(Node):
 
     def relocalizar(self, x, y, th):
         # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose con la pared de la puerta
-        # (ajuste_puerta). Si lo acepta, se aplica; si no, se sigue con la odometría.
+        # (ajuste_puerta): total (x, y, rumbo), parcial (x y rumbo) o nada (se sigue con la odometría).
         msg = self.scan
         if msg is self.reloc_ultimo_scan:
             return                  # el timer va más rápido que el LiDAR: cada scan una vez
@@ -506,23 +524,30 @@ class Fase1Node(Node):
         ok = ~np.isnan(r)
         px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
         py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
-        dx, dy, dth, motivo, d = ajuste_puerta(
+        dx, dy, dth, nivel, motivo, d = ajuste_puerta(
             px, py, x, y, self.reloc_pared_x, self.reloc_hueco_y, self.reloc_ancho, self.reloc_tol_ancho,
-            self.reloc_banda, self.reloc_largo, self.reloc_max_rms, self.reloc_min_puntos,
+            self.reloc_banda, self.reloc_largo, self.reloc_max_rms, self.reloc_min_puntos, self.reloc_min_cercano,
             self.reloc_max_dist, self.reloc_max_ang)
-        texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}'
-        medido = (f"{d['n']} puntos, rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else f"{d['n']} puntos")
-        if d['ancho'] is not None:
-            medido += f", hueco {d['ancho']:.2f} m"
-        if motivo == '':
-            self.get_logger().info(f'Relocalización aceptada: {texto} ({medido})')
+        medido = f"{d['n']} puntos" + (f", rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else '')
+        aviso = ''
+        if d['aviso_ancho']:
+            aviso = f" AVISO_ANCHO={d['ancho']:.2f}" if d['ancho'] is not None else ' AVISO_ANCHO=sin_lado_lejano'
+        if nivel == 'total':
+            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}'
+            self.get_logger().info(f'Relocalización: {texto} ({medido})')
             self.fijar_pose(x + dx, y + dy, normalizar(th + dth))
             self.obstaculos = {}    # sus posiciones se calcularon con la pose vieja: se vuelven a detectar
-            self.escribir_log(x + dx, y + dy, normalizar(th + dth), f'RELOC {texto} ancho={d["ancho"]:.3f}',
-                              math.hypot(dx, dy))
+            self.escribir_log(x + dx, y + dy, normalizar(th + dth), f'RELOC {texto}', math.hypot(dx, dy))
+        elif nivel == 'parcial':
+            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f} (dy={dy:+.3f} no aplicado){aviso}'
+            self.get_logger().warn(f'Relocalización parcial: {texto} ({medido})')
+            self.fijar_pose(x + dx, y, normalizar(th + dth))
+            self.obstaculos = {}
+            self.escribir_log(x + dx, y, normalizar(th + dth), f'RELOC_PARCIAL {texto}', abs(dx))
         else:
-            self.get_logger().warn(f'Relocalización rechazada ({motivo}): {texto} ({medido})')
-            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {motivo} {texto}', math.hypot(dx, dy))
+            texto = f'{motivo} dx={dx:+.3f} dth={math.degrees(dth):+.2f}'
+            self.get_logger().warn(f'Relocalización rechazada: {texto} ({medido})')
+            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {texto}', abs(dx))
         self.estado = 'GIRAR'
 
     def fijar_pose(self, x, y, th):

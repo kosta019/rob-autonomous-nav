@@ -78,7 +78,9 @@ def test_tramo_E_Door(ruta):
     _, _, puntos, lon, _, _ = ruta[3]
     assert lon == pytest.approx(6.13, abs=TOL_LONGITUD)
     assert len(puntos) == 3
-    assert math.dist(puntos[1], (5.96, 11.66)) < TOL_PUNTO
+    # Referencia actualizada el 05/11: con la zona hoja_puerta (hoja abierta hacia la sala, en el borde lejano)
+    # el punto intermedio se aleja de ella 16 cm hacia el borde cercano. Antes: (5.96, 11.66).
+    assert math.dist(puntos[1], (5.915, 11.505)) < TOL_PUNTO
 
 
 def test_tramo_Door_Q(ruta):

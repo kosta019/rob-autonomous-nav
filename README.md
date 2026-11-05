@@ -35,7 +35,8 @@ Con la ruta generada por el planificador (paso 2), añade `--params-file $CFG/fa
 
 ## Planificador (paso 2, offline en el portátil)
 
-Necesita scipy, Pillow y matplotlib, así que **no** se ejecuta en el PC del laboratorio: sus salidas están en el repo.
+Necesita scipy, Pillow y matplotlib (no los nodos ROS). En el PC del laboratorio están instalados como paquetes del sistema
+(comprobado el 05/11: scipy 1.11.4, Pillow 10.2.0), así que también se puede ejecutar allí. Sus salidas están en el repo.
 
 ```bash
 python3 autonomous_nav/scripts/planificar_fase1.py          # genera config/fase1_ruta.yaml, maps/holgura_5cm.*, docs/ruta_fase1_plan.png

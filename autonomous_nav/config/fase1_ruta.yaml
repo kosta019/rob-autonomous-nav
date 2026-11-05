@@ -1,8 +1,8 @@
-# GENERADO por scripts/planificar_fase1.py el 2026-10-27 13:33. No editar a mano:
+# GENERADO por scripts/planificar_fase1.py el 2026-11-05 16:39. No editar a mano:
 # cambia config/fase1.yaml y vuelve a ejecutar el script.
-# Inflado 0.25 m. Longitud 18.63 m. Holgura mínima 0.34 m.
+# Inflado 0.25 m. Longitud 18.55 m. Holgura mínima 0.34 m.
 fase1_node:
   ros__parameters:
     waypoint_names: ["B", "D", "E", "E-Door_1", "Door", "Door-Q_1", "Door-Q_2", "Q"]
-    waypoints_x:    [3.102, 5.285, 5.082, 5.965, 6.490, 7.415, 7.915, 8.970]
-    waypoints_y:    [1.722, 2.517, 6.122, 11.655, 11.682, 12.355, 14.005, 14.497]
+    waypoints_x:    [3.102, 5.285, 5.082, 5.915, 6.490, 7.415, 7.915, 8.970]
+    waypoints_y:    [1.722, 2.517, 6.122, 11.505, 11.682, 12.355, 14.005, 14.497]
