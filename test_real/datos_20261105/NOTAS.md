@@ -141,3 +141,16 @@ pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
 - fase1_node: estado RELOC en E-Door_1 (eventos RELOC / RELOC_RECHAZADA <motivo>); los puntos de relocalización se
   conservan al replanificar.
 - Tests: test_reloc.py (scans sintéticos con las caras del mapa) y casos del giróscopo. 29 tests.
+
+## Puerta medida (desde la cruz de G) y relocalización con el hueco
+- Medidas del usuario: a la pared de la puerta 0.91 m (mapa 0.86), al lado cercano del hueco 0.34 (mapa 0.34), al
+  lejano 1.12 (mapa 1.10). La puerta mide 0.76 m: el mapa está bien y no se toca. Con la profundidad de la sala
+  (5.91 frente a 5.86), la pared de la puerta está ~5 cm más allá: X = 6.39 para relocalizar (planificador: 6.34).
+- Ruta 3: el error estaba también en la Y del robot (el marco 11.27 se veía en ~11.50). La "cara Y = 12.37" que usaba
+  la relocalización anterior seguramente era otra superficie (¿la hoja de la puerta abierta?).
+- Relocalización nueva (`ajuste_puerta` en fase1_node): rumbo y X de la recta de la pared de la puerta a los dos
+  lados del hueco (x = 6.39); Y de los extremos del hueco (salto mayor de la línea de pared), con el ancho (0.76 ±
+  0.06) como comprobación. Salvaguardas: pocos_puntos, residuo (> 2 cm), ancho, dxy (> 0.30 m), dth (> 3°).
+- Validación con el bag (`reloc_puerta_bag.py`, robot parado 0.6 m antes de E-Door_1, 15:52-15:53, 5 ventanas):
+  dx +0.183 (13.7 cm + los 5 cm de la referencia 6.39), dth +0.8° a +1.35°, rms ~1 cm, pero dy -0.33 y hueco
+  0.84-0.86 m -> RECHAZADA ancho las 5 veces. La salvaguarda funciona; falta probar desde E-Door_1 (de frente).

@@ -51,22 +51,53 @@ def rayos_libres(rayos, d, margen, dist_min_cero):
     return True
 
 
-def decidir_reloc(pose, nueva, resumen, max_dist, max_ang, max_rms, min_puntos):
-    # ¿Se acepta la pose que dan las paredes (nueva) en lugar de la de la odometría (pose)?
-    # resumen: una entrada por cara usada (eje 'X'/'Y', n puntos, rms), como lo devuelve comprobar_pose.estimar.
-    # Devuelve (True, '') o (False, motivo).
-    if len({c['eje'] for c in resumen}) < 2:
-        return False, 'un_eje'          # con un solo eje, la otra coordenada no se ha medido
-    if sum(c['n'] for c in resumen) < min_puntos:
-        return False, 'pocos_puntos'
-    if any(c['rms'] > max_rms for c in resumen):
-        return False, 'residuo'         # alguna cara no encaja: mapa distinto o algo delante de la pared
-    if math.hypot(nueva[0] - pose[0], nueva[1] - pose[1]) > max_dist:
-        return False, 'dxy'             # corrección demasiado grande: probablemente ha encajado mal
-    if abs(normalizar(nueva[2] - pose[2])) > max_ang:
-        return False, 'dth'
-    return True, ''
-
+def ajuste_puerta(px, py, rx, ry, x_pared, y_hueco, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
+                  max_dist, max_ang):
+    # Relocalización con la pared de la puerta (lado sala), en el robot parado. px, py: puntos del scan pasados al
+    # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. La pared real es la recta x = x_pared con el
+    # hueco de la puerta entre y_hueco[0] e y_hueco[1].
+    # - Rumbo y X: ajuste de la recta x = a + b*y con los puntos de los dos lados del hueco.
+    # - Y: los extremos del hueco (donde la línea de pared se corta y donde vuelve a empezar), no otras caras.
+    # Devuelve (dx, dy, dth, motivo, datos): la corrección a sumar a la pose creída, '' si se acepta o el motivo
+    # del rechazo, y un diccionario con lo medido (para el log).
+    sel = ((np.abs(px - x_pared) < banda) & (py > y_hueco[0] - largo) & (py < y_hueco[1] + largo))
+    x, y = px[sel], py[sel]
+    datos = {'n': int(len(x)), 'rms': None, 'ancho': None}
+    if len(x) < min_puntos:
+        return 0.0, 0.0, 0.0, 'pocos_puntos', datos
+    # Recta en dos pasadas, quitando cada vez lo que queda lejos (hoja de la puerta, una persona...). El residuo se
+    # mide con lo que queda a < 5 cm: recortar más haría que una pared con mucho ruido pareciera limpia.
+    for umbral in (0.10, 0.05):
+        b, a = np.polyfit(y, x, 1)
+        cerca = np.abs(x - (a + b * y)) < umbral
+        x, y = x[cerca], y[cerca]
+        datos['n'] = int(len(x))
+        if len(x) < min_puntos:
+            return 0.0, 0.0, 0.0, 'pocos_puntos', datos
+    b, a = np.polyfit(y, x, 1)
+    datos['rms'] = float(np.sqrt(np.mean((x - (a + b * y)) ** 2)))
+    # Error de rumbo: la recta debería ir exactamente en dirección Y. Se corrige girando los puntos alrededor del
+    # robot (así su posición no cambia con el giro).
+    dth = math.atan(b)
+    c, s = math.cos(dth), math.sin(dth)
+    xr = rx + c * (x - rx) - s * (y - ry)
+    yr = ry + s * (x - rx) + c * (y - ry)
+    dx = x_pared - float(np.mean(xr))
+    # El hueco: el salto mayor entre puntos consecutivos de la pared, ordenados por y
+    ys = np.sort(yr)
+    k = int(np.argmax(np.diff(ys)))
+    y1, y2 = float(ys[k]), float(ys[k + 1])
+    datos['ancho'] = y2 - y1
+    dy = (y_hueco[0] + y_hueco[1]) / 2.0 - (y1 + y2) / 2.0
+    if datos['rms'] > max_rms:
+        return dx, dy, dth, 'residuo', datos      # la recta no es buena: el hueco tampoco
+    if abs(datos['ancho'] - ancho) > tol_ancho:
+        return dx, dy, dth, 'ancho', datos        # no se ve un hueco como la puerta
+    if math.hypot(dx, dy) > max_dist:
+        return dx, dy, dth, 'dxy', datos
+    if abs(dth) > max_ang:
+        return dx, dy, dth, 'dth', datos
+    return dx, dy, dth, '', datos
 
 class Fase1Node(Node):
     def __init__(self):
@@ -103,7 +134,12 @@ class Fase1Node(Node):
         # Relocalización con las paredes del mapa al llegar a ciertos waypoints (robot parado)
         self.reloc_puntos = self.declare_parameter('reloc_waypoints', SA).value
         self.reloc_n = self.declare_parameter('reloc_scans', Parameter.Type.INTEGER).value
-        self.reloc_eje = self.declare_parameter('reloc_heading_axis', Parameter.Type.STRING).value
+        self.reloc_pared_x = self.declare_parameter('reloc_wall_x', D).value
+        self.reloc_hueco_y = self.declare_parameter('reloc_door_y', DA).value
+        self.reloc_ancho = self.declare_parameter('reloc_door_width', D).value
+        self.reloc_tol_ancho = self.declare_parameter('reloc_door_width_tol', D).value
+        self.reloc_banda = self.declare_parameter('reloc_band', D).value
+        self.reloc_largo = self.declare_parameter('reloc_wall_length', D).value
         self.reloc_max_rms = self.declare_parameter('reloc_max_rms', D).value
         self.reloc_min_puntos = self.declare_parameter('reloc_min_points', Parameter.Type.INTEGER).value
         self.reloc_max_dist = self.declare_parameter('reloc_max_dist', D).value
@@ -192,7 +228,6 @@ class Fase1Node(Node):
         self.t_espera = None        # cuándo empezó la espera en ESPERAR
         self.n_replan = 0
         self.w_anterior = 0.0       # última velocidad angular mandada
-        self.caras = cp.cargar_caras()   # caras de pared del mapa (maps/paredes.yaml), para relocalizar
         self.reloc_hechas = set()   # waypoints donde ya se relocalizó (una vez cada uno)
         self.reloc_scans_lista = [] # scans juntados en RELOC
         self.reloc_ultimo_scan = None
@@ -452,8 +487,8 @@ class Fase1Node(Node):
     # ---------- Relocalización con las paredes ----------
 
     def relocalizar(self, x, y, th):
-        # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose a las paredes del mapa
-        # con el mismo código que comprobar_pose. Si decidir_reloc la acepta, se aplica; si no, sigue la odometría.
+        # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose con la pared de la puerta
+        # (ajuste_puerta). Si lo acepta, se aplica; si no, se sigue con la odometría.
         msg = self.scan
         if msg is self.reloc_ultimo_scan:
             return                  # el timer va más rápido que el LiDAR: cada scan una vez
@@ -463,22 +498,31 @@ class Fase1Node(Node):
         self.reloc_scans_lista.append(r)
         if len(self.reloc_scans_lista) < self.reloc_n:
             return
-        info = (msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
-        mediana = cp.mediana_de_scans(self.reloc_scans_lista)
-        nx, ny, nth, resumen = cp.estimar((x, y, th), self.lidar_offset_x, mediana, info, self.caras, self.reloc_eje)
-        nth = normalizar(nth - self.lidar_yaw_offset)   # las paredes dan el rumbo del LiDAR
-        ok, motivo = decidir_reloc((x, y, th), (nx, ny, nth), resumen, self.reloc_max_dist, self.reloc_max_ang,
-                                   self.reloc_max_rms, self.reloc_min_puntos)
-        texto = f'dx={nx - x:+.3f} dy={ny - y:+.3f} dth={math.degrees(normalizar(nth - th)):+.2f}'
-        caras_txt = ' '.join(f"{c['eje']}={c['c']:.2f}:{c['n']}pt/{c['rms'] * 100:.1f}cm" for c in resumen)
-        if ok:
-            self.get_logger().info(f'Relocalización aceptada: {texto} ({caras_txt})')
-            self.fijar_pose(nx, ny, nth)
+        # Mediana de los scans, y cada lectura al mundo con la pose creída
+        r = cp.mediana_de_scans(self.reloc_scans_lista)
+        a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+        ok = ~np.isnan(r)
+        px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
+        py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
+        dx, dy, dth, motivo, d = ajuste_puerta(
+            px, py, x, y, self.reloc_pared_x, self.reloc_hueco_y, self.reloc_ancho, self.reloc_tol_ancho,
+            self.reloc_banda, self.reloc_largo, self.reloc_max_rms, self.reloc_min_puntos,
+            self.reloc_max_dist, self.reloc_max_ang)
+        texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}'
+        medido = (f"{d['n']} puntos, rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else f"{d['n']} puntos")
+        if d['ancho'] is not None:
+            medido += f", hueco {d['ancho']:.2f} m"
+        if motivo == '':
+            self.get_logger().info(f'Relocalización aceptada: {texto} ({medido})')
+            self.fijar_pose(x + dx, y + dy, normalizar(th + dth))
             self.obstaculos = {}    # sus posiciones se calcularon con la pose vieja: se vuelven a detectar
-            self.escribir_log(nx, ny, nth, f'RELOC {texto}', math.hypot(nx - x, ny - y))
+            self.escribir_log(x + dx, y + dy, normalizar(th + dth), f'RELOC {texto} ancho={d["ancho"]:.3f}',
+                              math.hypot(dx, dy))
         else:
-            self.get_logger().warn(f'Relocalización rechazada ({motivo}): {texto} ({caras_txt})')
-            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {motivo} {texto}', math.hypot(nx - x, ny - y))
+            self.get_logger().warn(f'Relocalización rechazada ({motivo}): {texto} ({medido})')
+            self.escribir_log(x, y, th, f'RELOC_RECHAZADA {motivo} {texto}', math.hypot(dx, dy))
         self.estado = 'GIRAR'
 
     def fijar_pose(self, x, y, th):

@@ -77,3 +77,48 @@ def test_cruzar_180_grados_no_es_deriva():
 
 def test_sin_imu_avisa():
     assert aviso_giroscopo([], [0.1] * 100) is not None
+
+
+# ---------- Rumbo de una sola pared (estimar con eje_rumbo) sobre scans sintéticos con las caras del mapa ----------
+
+from autonomous_nav import comprobar_pose as cp  # noqa: E402
+
+INFO = (0.0, 2.0 * math.pi / 360, 0.12, 3.5)
+OFF = -0.032
+
+
+@pytest.fixture(scope='module')
+def caras():
+    return cp.cargar_caras()
+
+
+def scan_sintetico(pose, caras, giro_caras_x=0.0):
+    # Distancias desde 'pose' contra las caras del mapa (nan sin pared o a más de 3.5 m).
+    # giro_caras_x: las caras X se ven giradas ese ángulo (paredes no perpendiculares).
+    x, y, th = pose
+    a = INFO[0] + np.arange(360) * INFO[1]
+    L = (x + OFF * math.cos(th), y + OFF * math.sin(th))
+    d, cara = cp.trazar(L, th + a, caras)
+    if giro_caras_x:
+        d2, cara2 = cp.trazar(L, th + giro_caras_x + a, caras)
+        es_x = (cara >= 0) & (caras['eje'][np.maximum(cara, 0)] == 0)
+        es_x2 = (cara2 >= 0) & (caras['eje'][np.maximum(cara2, 0)] == 0)
+        d = np.where(es_x, np.where(es_x2, d2, np.nan), d)
+    d[d > INFO[3]] = np.nan
+    return d
+
+
+def test_recupera_la_pose_en_A_con_el_rumbo_de_la_pared_izquierda(caras):
+    real = (0.71, 0.92, math.radians(1.0))
+    x, y, th, _ = cp.estimar((0.70, 0.90, 0.0), OFF, scan_sintetico(real, caras), INFO, caras, 'Y')
+    assert math.hypot(x - real[0], y - real[1]) < 0.01 and abs(math.degrees(th - real[2])) < 0.2
+
+
+def test_eje_rumbo_y_ignora_una_pared_x_girada(caras):
+    # La pared del fondo (caras X) se ve girada 1.5°: con 'Y' el rumbo sale de la pared izquierda
+    real = (0.71, 0.92, math.radians(1.0))
+    r = scan_sintetico(real, caras, giro_caras_x=math.radians(1.5))
+    _, _, th_y, _ = cp.estimar((0.70, 0.90, 0.0), OFF, r, INFO, caras, 'Y')
+    _, _, th_todas, _ = cp.estimar((0.70, 0.90, 0.0), OFF, r, INFO, caras, '')
+    assert abs(math.degrees(th_y - real[2])) < 0.2
+    assert abs(math.degrees(th_todas - real[2])) > 0.3      # mezclando las dos, el rumbo se desvía

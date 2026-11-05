@@ -1,6 +1,7 @@
-# Test sin robot de la relocalización con las paredes: decidir_reloc (fase1_node) y el ajuste de
-# comprobar_pose (estimar) sobre scans SINTÉTICOS generados con las mismas caras del mapa (maps/paredes.yaml).
-# No simula el robot: comprueba que el algoritmo recupera una pose conocida a partir de una pose errónea.
+# Test sin robot de la relocalización con la pared de la puerta (ajuste_puerta de fase1_node).
+# Los puntos son SINTÉTICOS: rayos del LiDAR desde una pose conocida contra la recta x = 6.39 con el hueco de la
+# puerta, pasados al mundo con una pose creída errónea (como los ve el nodo). No simula el robot: comprueba que el
+# algoritmo recupera la corrección y que las salvaguardas rechazan lo que deben.
 # Uso (con ROS cargado):  python3 -m pytest autonomous_nav/test/test_reloc.py -v
 import math
 import os
@@ -12,83 +13,118 @@ import pytest
 pytest.importorskip('rclpy')
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
-from autonomous_nav import comprobar_pose as cp  # noqa: E402
-from autonomous_nav.fase1_node import decidir_reloc  # noqa: E402
+from autonomous_nav.fase1_node import ajuste_puerta  # noqa: E402
 
-N = 360
-INFO = (0.0, 2.0 * math.pi / N, 0.12, 3.5)
-OFF = -0.032                       # lidar_offset_x
-LIMITES = dict(max_dist=0.30, max_ang=math.radians(3.0), max_rms=0.02, min_puntos=30)
-
-# Delante de la puerta el 05/11: pose real (paredes) y la que creía el robot (odometría)
-REAL_PUERTA = (5.833, 11.005, math.radians(103.8))
-CREIDA_PUERTA = (5.696, 11.017, 1.827)
+X_PARED = 6.39
+HUECO = (11.265, 12.025)            # 0.76 m, como el medido
+OFF = -0.032                        # lidar_offset_x
+REAL = (5.965, 11.655, math.radians(81.0))   # en E-Door_1, llegando desde E
+PARAM = dict(x_pared=X_PARED, y_hueco=(11.27, 12.02), ancho=0.76, tol_ancho=0.06, banda=0.35, largo=1.0,
+             max_rms=0.02, min_puntos=30, max_dist=0.30, max_ang=math.radians(3.0))
 
 
-@pytest.fixture(scope='module')
-def caras():
-    return cp.cargar_caras()
+def puntos(real, creida, hueco=HUECO, hoja=None, ruido=0.0, semilla=0):
+    # Rayos cada 1° desde el LiDAR en la pose real contra la pared y, si hoja = 'sala' o 'vestibulo', contra la hoja
+    # de la puerta abierta hacia ese lado (0.7 m perpendicular a la pared desde el borde y = hueco[0]). Devuelve los puntos en el mundo vistos
+    # con la pose creída: P_creído = r_creído + R(e) (P - r_real), con e = th_creído - th_real.
+    xr, yr, thr = real
+    lx, ly = xr + OFF * math.cos(thr), yr + OFF * math.sin(thr)
+    rng = np.random.default_rng(semilla)
+    pts = []
+    for ang in thr + np.radians(np.arange(360)):
+        c, s = math.cos(ang), math.sin(ang)
+        t = []
+        if abs(c) > 1e-9:
+            tp = (X_PARED - lx) / c
+            yp = ly + tp * s
+            if tp > 0 and not (hueco[0] < yp < hueco[1]):
+                t.append(tp)
+        if hoja and abs(s) > 1e-9:
+            th_ = (hueco[0] - ly) / s
+            xh = lx + th_ * c
+            x0, x1 = (X_PARED - 0.7, X_PARED) if hoja == 'sala' else (X_PARED, X_PARED + 0.7)
+            if th_ > 0 and x0 < xh < x1:
+                t.append(th_)
+        if t and min(t) < 3.5:
+            d = min(t) + rng.normal(0.0, ruido)
+            pts.append((lx + d * c, ly + d * s))
+    p = np.array(pts)
+    e = creida[2] - real[2]
+    ce, se = math.cos(e), math.sin(e)
+    qx = creida[0] + ce * (p[:, 0] - xr) - se * (p[:, 1] - yr)
+    qy = creida[1] + se * (p[:, 0] - xr) + ce * (p[:, 1] - yr)
+    return qx, qy
 
 
-def scan_sintetico(pose, caras, giro_caras_x=0.0):
-    # Distancias que vería el LiDAR desde 'pose' contra las caras del mapa (nan si no hay pared o más de 3.5 m).
-    # giro_caras_x: las caras X se ven giradas ese ángulo (paredes no perpendiculares).
-    x, y, th = pose
-    a = INFO[0] + np.arange(N) * INFO[1]
-    L = (x + OFF * math.cos(th), y + OFF * math.sin(th))
-    d, cara = cp.trazar(L, th + a, caras)
-    if giro_caras_x:
-        d2, cara2 = cp.trazar(L, th + giro_caras_x + a, caras)
-        es_x = (cara >= 0) & (caras['eje'][np.maximum(cara, 0)] == 0)
-        es_x2 = (cara2 >= 0) & (caras['eje'][np.maximum(cara2, 0)] == 0)
-        d = np.where(es_x, np.where(es_x2, d2, np.nan), d)
-    d[d > INFO[3]] = np.nan
-    return d
+def creida(dx, dy, dth_grados, real=REAL):
+    return (real[0] + dx, real[1] + dy, real[2] + math.radians(dth_grados))
 
 
-def error(est, real):
-    return math.hypot(est[0] - real[0], est[1] - real[1]), abs(math.degrees(cp.normalizar(est[2] - real[2])))
+def test_recupera_el_error_de_la_ruta_3():
+    # Como el 05/11 delante de la puerta: ~14 cm en X, ~20 cm en Y y ~1° de rumbo
+    c = creida(-0.137, -0.20, 0.9)
+    px, py = puntos(REAL, c)
+    dx, dy, dth, motivo, d = ajuste_puerta(px, py, c[0], c[1], **PARAM)
+    assert motivo == ''
+    assert abs(dx - 0.137) < 0.015 and abs(dy - 0.20) < 0.015 and abs(math.degrees(dth) + 0.9) < 0.2
+    assert abs(d['ancho'] - 0.76) < 0.03
 
 
-def test_recupera_la_pose_real_delante_de_la_puerta(caras):
-    r = scan_sintetico(REAL_PUERTA, caras)
-    x, y, th, resumen = cp.estimar(CREIDA_PUERTA, OFF, r, INFO, caras, '')
-    dxy, dth = error((x, y, th), REAL_PUERTA)
-    assert dxy < 0.01 and dth < 0.2, (dxy, dth)
-    assert {c['eje'] for c in resumen} == {'X', 'Y'}
-    assert decidir_reloc(CREIDA_PUERTA, (x, y, th), resumen, **LIMITES) == (True, '')
+def test_hoja_abierta_hacia_el_vestibulo_se_ignora():
+    # Solo añade unos puntos junto al borde del hueco: la corrección sigue siendo buena
+    c = creida(-0.10, 0.12, -0.5)
+    px, py = puntos(REAL, c, hoja='vestibulo')
+    dx, dy, dth, motivo, _ = ajuste_puerta(px, py, c[0], c[1], **PARAM)
+    assert motivo == ''
+    assert abs(dx - 0.10) < 0.015 and abs(dy + 0.12) < 0.015 and abs(math.degrees(dth) - 0.5) < 0.2
 
 
-def test_recupera_la_pose_en_A_con_el_rumbo_de_la_pared_izquierda(caras):
-    real = (0.71, 0.92, math.radians(1.0))
-    r = scan_sintetico(real, caras)
-    x, y, th, _ = cp.estimar((0.70, 0.90, 0.0), OFF, r, INFO, caras, 'Y')
-    dxy, dth = error((x, y, th), real)
-    assert dxy < 0.01 and dth < 0.2, (dxy, dth)
+def test_hoja_abierta_hacia_la_sala_se_rechaza():
+    # Desde E-Door_1 la hoja tapa la pared de ese lado: el hueco no se puede medir y NO se debe corregir
+    c = creida(-0.10, 0.12, -0.5)
+    px, py = puntos(REAL, c, hoja='sala')
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] in ('residuo', 'ancho', 'pocos_puntos')
 
 
-def test_eje_rumbo_y_ignora_una_pared_x_girada(caras):
-    # La pared del fondo (caras X) se ve girada 1.5°: con eje_rumbo 'Y' el rumbo sale de la pared izquierda
-    real = (0.71, 0.92, math.radians(1.0))
-    r = scan_sintetico(real, caras, giro_caras_x=math.radians(1.5))
-    _, _, th_y, _ = cp.estimar((0.70, 0.90, 0.0), OFF, r, INFO, caras, 'Y')
-    _, _, th_todas, _ = cp.estimar((0.70, 0.90, 0.0), OFF, r, INFO, caras, '')
-    assert abs(math.degrees(th_y - real[2])) < 0.2
-    assert abs(math.degrees(th_todas - real[2])) > 0.3      # mezclando las dos, el rumbo se desvía
+def test_ruido_de_1_cm_se_acepta():
+    c = creida(0.05, -0.05, 0.3)
+    px, py = puntos(REAL, c, ruido=0.01)
+    dx, dy, dth, motivo, _ = ajuste_puerta(px, py, c[0], c[1], **PARAM)
+    assert motivo == ''
+    assert abs(dx + 0.05) < 0.02 and abs(dy - 0.05) < 0.02
 
 
-def cara(eje, n=50, rms=0.005):
-    return {'eje': eje, 'n': n, 'rms': rms}
+def test_ruido_de_4_cm_se_rechaza_por_residuo():
+    c = creida(0.05, -0.05, 0.3)
+    px, py = puntos(REAL, c, ruido=0.04)
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] == 'residuo'
 
 
-@pytest.mark.parametrize('resumen, nueva, motivo', [
-    ([cara('X'), cara('X')], (0.05, 0.0, 0.0), 'un_eje'),
-    ([cara('X', 10), cara('Y', 10)], (0.05, 0.0, 0.0), 'pocos_puntos'),
-    ([cara('X'), cara('Y', rms=0.03)], (0.05, 0.0, 0.0), 'residuo'),
-    ([cara('X'), cara('Y')], (0.25, 0.25, 0.0), 'dxy'),
-    ([cara('X'), cara('Y')], (0.05, 0.0, math.radians(4.0)), 'dth'),
-    ([cara('X'), cara('Y')], (0.20, 0.0, math.radians(2.0)), ''),
-])
-def test_decidir_reloc(resumen, nueva, motivo):
-    ok, m = decidir_reloc((0.0, 0.0, 0.0), nueva, resumen, **LIMITES)
-    assert m == motivo and ok == (motivo == '')
+def test_puerta_cerrada_no_hay_hueco():
+    c = creida(0.05, 0.05, 0.0)
+    px, py = puntos(REAL, c, hueco=(0.0, 0.0))
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] == 'ancho'
+
+
+def test_hueco_de_50_cm_no_es_la_puerta():
+    c = creida(0.05, 0.05, 0.0)
+    px, py = puntos(REAL, c, hueco=(11.40, 11.90))
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] == 'ancho'
+
+
+def test_pocos_puntos():
+    c = creida(0.05, 0.05, 0.0)
+    px, py = puntos(REAL, c)
+    assert ajuste_puerta(px[:20], py[:20], c[0], c[1], **PARAM)[3] == 'pocos_puntos'
+
+
+def test_correccion_de_posicion_demasiado_grande():
+    c = creida(0.0, -0.33, 0.0)
+    px, py = puntos(REAL, c)
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] == 'dxy'
+
+
+def test_correccion_de_rumbo_demasiado_grande():
+    c = creida(0.0, 0.0, 3.5)
+    px, py = puntos(REAL, c)
+    assert ajuste_puerta(px, py, c[0], c[1], **PARAM)[3] == 'dth'
