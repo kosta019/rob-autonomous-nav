@@ -8,6 +8,9 @@ fase1_node:
     max_linear_speed: 0.08
     tol_mandatory: 0.02          # con 0.03 se paraba ~2.7 cm antes de B. Si da vueltas cerca de un punto, volver a 0.03
     tol_final_yaw: 0.03
+    # Red de seguridad (05/11): en la ruta completa una persona cruzó a 1 m de E y el robot no la olvidó en 60 s
+    # (los rayos daban 0.0, que antes no borraba, y con 30 s de memoria la gente que pasaba reiniciaba la cuenta).
+    obstacle_memory_time: 8.0
     # Rumbo de /odom (integra en el robot, no depende de la WiFi). Prueba del 05/11: 4 vueltas,
     # error -1.3° (odom) y -1.9° (imu) frente a las paredes. yaw_imu se sigue escribiendo en el log.
     # Ojo: el driver del TB3 (odometry.use_imu: true) saca el rumbo de /odom del IMU de la OpenCR, no de las

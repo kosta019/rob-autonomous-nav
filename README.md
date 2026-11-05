@@ -42,6 +42,12 @@ python3 autonomous_nav/scripts/planificar_fase1.py          # genera config/fase
 python3 -m pytest autonomous_nav/test/test_planificador.py  # compara con los valores de referencia de TAREA_FASE1.md
 ```
 
+Test de la regla de borrado de obstáculos (sin robot, en el PC del laboratorio, con ROS cargado):
+
+```bash
+python3 -m pytest autonomous_nav/test/test_borrado.py -v
+```
+
 ## Mundo de Gazebo del laboratorio
 
 Generado desde el mapa (`python3 autonomous_nav/scripts/generar_mundo_lab.py` -> `worlds/laboratorio.sdf`).

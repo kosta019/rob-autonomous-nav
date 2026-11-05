@@ -42,6 +42,9 @@ fase1_node:
     obstacle_static_margin: 0.20 # m: una lectura es obstáculo NUEVO si la holgura estática allí es mayor (la deriva desplaza
                                  #   las paredes; con 0.15 salían paredes desplazadas 16 cm como obstáculos en el vestíbulo)
     obstacle_plan_margin: 0.10   # m: al replanificar, los obstáculos nuevos cuentan como si fueran esto más grandes
+    obstacle_clear_scans: 3      # escaneos SEGUIDOS viendo libre un obstáculo para olvidarlo (una lectura suelta no basta)
+    obstacle_clear_zero_min_dist: 0.5  # m: una lectura 0.0 (LDS real: nada hasta range_max) cuenta como libre solo si el
+                                 #   obstáculo está más lejos que esto (0.0 también es "más cerca que range_min")
     obstacle_memory_time: 30.0   # s sin volver a ver un obstáculo para olvidarlo
     obstacle_clear_margin: 0.10  # m: se olvida antes si un rayo del LiDAR pasa esto más allá de él (se ha ido)
     obstacle_log_spacing: 0.20   # m: un obstáculo va al Mission Log si está a esto de los ya registrados

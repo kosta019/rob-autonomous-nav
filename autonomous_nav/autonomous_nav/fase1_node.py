@@ -38,6 +38,18 @@ def limitar(valor, maximo):
     return max(-maximo, min(maximo, valor))
 
 
+def rayos_libres(rayos, d, margen, dist_min_cero):
+    # ¿Dicen los rayos que apuntan a un obstáculo recordado (a distancia d del LiDAR) que ya no está?
+    # Un rayo es "libre" si da inf, una distancia mayor que d + margen, o 0.0 con el obstáculo lejos.
+    # El LDS real da 0.0 cuando el rayo no choca con nada hasta range_max (Gazebo da inf), pero también
+    # cuando algo está más cerca que range_min: por eso un 0.0 solo vale si d > dist_min_cero.
+    for r in rayos:
+        if r == math.inf or (math.isfinite(r) and r > d + margen) or (r == 0.0 and d > dist_min_cero):
+            continue
+        return False
+    return True
+
+
 class Fase1Node(Node):
     def __init__(self):
         super().__init__('fase1_node')
@@ -78,6 +90,8 @@ class Fase1Node(Node):
         self.margen_plan = self.declare_parameter('obstacle_plan_margin', D).value
         self.memoria = self.declare_parameter('obstacle_memory_time', D).value
         self.margen_borrado = self.declare_parameter('obstacle_clear_margin', D).value
+        self.escaneos_borrado = self.declare_parameter('obstacle_clear_scans', Parameter.Type.INTEGER).value
+        self.dist_min_cero = self.declare_parameter('obstacle_clear_zero_min_dist', D).value
         self.separacion_log = self.declare_parameter('obstacle_log_spacing', D).value
         self.alcance_obstaculos = self.declare_parameter('obstacle_max_range', D).value
         self.giro_max_obstaculos = self.declare_parameter('obstacle_max_turn_rate', D).value
@@ -140,8 +154,10 @@ class Fase1Node(Node):
         self.frenado = False
         self.t_ultimo_log = None
 
-        # Memoria de obstáculos nuevos: celda de 5 cm -> [x, y, última vez que se vio (s)]
+        # Memoria de obstáculos nuevos: celda de 5 cm -> [x, y, última vez que se vio (s), escaneos seguidos
+        # en los que los rayos lo ven libre]
         self.obstaculos = {}
+        self.scan_borrado = None    # último scan con el que se contaron esos escaneos (se cuenta una vez por scan)
         self.obstaculos_log = []    # posiciones ya escritas en el Mission Log
         self.t_espera = None        # cuándo empezó la espera en ESPERAR
         self.n_replan = 0
@@ -285,21 +301,31 @@ class Fase1Node(Node):
                     math.hypot(ox - qx, oy - qy) > self.separacion_log for qx, qy in self.obstaculos_log):
                 self.obstaculos_log.append((ox, oy))
                 self.escribir_log(x, y, th, 'OBSTACULO', None, ox, oy)
-            self.obstaculos[(i, j)] = [ox, oy, ahora]
+            self.obstaculos[(i, j)] = [ox, oy, ahora, 0]
 
-        # b) Olvidar: por tiempo, o porque los rayos que apuntan a él (y sus vecinos) llegan más lejos.
-        #    inf = el rayo no ha chocado con nada en todo su alcance: también es "libre".
-        for celda, (ox, oy, t) in list(self.obstaculos.items()):
+        # b) Olvidar: por tiempo, o porque los rayos que apuntan a él (y sus vecinos) lo ven libre (rayos_libres)
+        #    en obstacle_clear_scans escaneos SEGUIDOS: una lectura suelta (un 0.0 de ropa negra) no basta.
+        #    Se cuenta una vez por scan: el timer va más rápido que el LiDAR y vería el mismo scan dos veces.
+        scan_nuevo = msg is not self.scan_borrado
+        self.scan_borrado = msg
+        for celda, ob in list(self.obstaculos.items()):
+            ox, oy, t = ob[0], ob[1], ob[2]
             if ahora - t > self.memoria:
                 del self.obstaculos[celda]
+                continue
+            if not scan_nuevo:
                 continue
             d = math.hypot(ox - lx, oy - ly)
             if not (msg.range_min < d < msg.range_max):
                 continue
             k = int(round(((math.atan2(oy - ly, ox - lx) - th - msg.angle_min) % (2 * math.pi)) / msg.angle_increment))
             rayos = [r[(k + dk) % n] for dk in (-1, 0, 1)]
-            if all(ri == math.inf or (math.isfinite(ri) and ri > d + self.margen_borrado) for ri in rayos):
-                del self.obstaculos[celda]
+            if rayos_libres(rayos, d, self.margen_borrado, self.dist_min_cero):
+                ob[3] += 1
+                if ob[3] >= self.escaneos_borrado:
+                    del self.obstaculos[celda]
+            else:
+                ob[3] = 0
 
     def ruta_bloqueada(self, x, y, extra=0.0):
         # Obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m).

@@ -65,3 +65,19 @@ Hipótesis: la esquina no es de 90°. PENDIENTE: triángulo 3-4-5 en la esquina 
 - Descomprimir: `zstd -dc FICHERO.tar.zst | tar -xf -` y luego `ros2 bag info fase1_...`.
 - Al final del log de la nº 2 (ya en FIN, al mover el robot para medir) el rumbo de /odom salta de 0.326 a -0.02 rad
   con x, y quietos: otra vez el IMU al manipular el robot. No afecta a la prueba.
+
+## Ruta completa nº 1 (14:56:31-14:59:11) — `mission_log_ruta_completa_1.csv`, bag `fase1_20261105_145612`
+- Salida en A (comprobar_pose con canaleta y lidar_yaw_offset 0.019): (0.710, 0.908, -0.08°). Deriva previa -0.006° en 10 s.
+- B (14:57:03, 6.9 cm) y D (14:57:33, 6.9 cm) bien. A las 14:58:07, en (5.12, 5.11), a 1 m de E, una persona cruza:
+  BLOQUEO y después SIN_CAMINO cada 5 s (E obligatorio tapado) hasta que se paró a mano a las 14:59:11.
+- Causa (`serie_bloqueo.py`, `rayos_E.py` sobre el bag): de 14:58:13 a 14:58:30 la ruta estaba libre en el scan,
+  pero el LDS da 0.0 (no inf) cuando el rayo no choca con nada hasta 3.5 m, y la regla de borrado solo aceptaba
+  inf o una distancia mayor. Solo quedaba el olvido por tiempo (30 s), y la gente que pasaba lo reiniciaba.
+  En Gazebo no se veía porque allí un rayo sin choque da inf.
+- Arreglo: `rayos_libres` (0.0 = libre si el obstáculo está a > 0.5 m), 3 escaneos libres seguidos para borrar
+  (un 0.0 suelto de ropa negra no basta) y obstacle_memory_time 8 s en real.yaml. Test: `test/test_borrado.py`.
+
+## Prueba 3b en el robot real (pendiente)
+Ruta completa desde A. Alguien se pone delante del robot a ~1 m unos 4 s y se aparta a más de 1 m.
+Esperado: BLOQUEO, y RUTA_LIBRE a 1-2 s de apartarse, sin REPLANIFICACION ni SIN_CAMINO.
+Quien acompañe al robot, detrás o a un lado a más de 0.5 m (a < 0.35 m de los próximos 1.6 m de ruta lo para).
