@@ -16,9 +16,8 @@ fase1_node:
     # Ojo: el driver del TB3 (odometry.use_imu: true) saca el rumbo de /odom del IMU de la OpenCR, no de las
     # ruedas. Si se inclina o se sacude el robot, ese rumbo salta (05/11: 131° al cogerlo con la mano).
     use_imu_yaw: false
-    # Desfase de rumbo del LiDAR de ESTE robot (BOT 11), en rad; positivo = LiDAR girado a la izquierda.
-    # Solo lo usa comprobar_pose (fase1_node todavía no). Dos A->B del 05/11:
-    #   1ª: 1.49° (0.026), con la salida supuesta = comprobar_pose + 4 cm de canaleta (sin cinta en A);
-    #   2ª, ya con 0.026: el robot avanzó 0.46° a la izquierda de lo que creía -> 1.03° (0.018), cinta en A y B.
-    # Se toma 0.019 (1.09°): casi el valor de la 2ª, que se midió con cinta en los dos extremos.
-    lidar_yaw_offset: 0.019
+    # Desfase de rumbo del LiDAR: 0. Historia (05/11): con el rumbo de las dos paredes de A salió 0.026 y luego 0.019
+    # (dos A->B con cinta). Pero las dos paredes difieren 1.76° entre sí (no son perpendiculares) y el rumbo de la
+    # pared izquierda sola coincide con el real (±0.1°): el montaje del LiDAR está bien. Ahora comprobar_pose saca
+    # el rumbo solo de la pared izquierda (pose_heading_axis "Y" en fase1.yaml).
+    lidar_yaw_offset: 0.0

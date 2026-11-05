@@ -62,6 +62,19 @@ fase1_node:
     # ---------- Robot ----------
     lidar_offset_x: -0.032       # m, posición del LiDAR (base_scan) sobre el eje del robot. Del URDF turtlebot3_burger (scan_joint)
     use_imu_yaw: true            # rumbo integrando el giróscopo de /imu (como el driver del TB3 real). false: rumbo de /odom
+    lidar_yaw_offset: 0.0        # rad: desfase de montaje del LiDAR (positivo = girado a la izquierda). comprobar_pose y la
+                                 #   relocalización lo restan al rumbo de las paredes. 05/11: 0 (ver real.yaml y CLAUDE.md)
+    pose_heading_axis: "Y"       # comprobar_pose: el rumbo sale solo de las caras de este eje ("Y" = pared izquierda,
+                                 #   y = 0.04); la posición, de todas. Las dos paredes de A difieren 1.76° (05/11). "" = todas
+
+    # ---------- Relocalización con las paredes (robot parado, mismo ajuste que comprobar_pose) ----------
+    reloc_waypoints: ["E-Door_1"] # al llegar a estos waypoints (una vez cada uno). Antes de la puerta: 05/11 llegó con 14 cm de error
+    reloc_scans: 10              # scans que se juntan (mediana): a 5 Hz, unos 2 s parado
+    reloc_heading_axis: ""       # caras que dan el rumbo: "" todas (en E-Door_1: X = 6.34/6.35 e Y = 12.37), "X" o "Y"
+    reloc_max_rms: 0.02          # m: residuo máximo de cada cara para aceptar la corrección
+    reloc_min_points: 30         # puntos de pared mínimos (en total)
+    reloc_max_dist: 0.30         # m: corrección de posición máxima; más, se rechaza (RELOC_RECHAZADA dxy)
+    reloc_max_angle_deg: 3.0     # grados: corrección de rumbo máxima
 
     # ---------- Log ----------
     log_file: "mission_log.csv"

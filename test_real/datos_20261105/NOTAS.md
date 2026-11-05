@@ -111,3 +111,33 @@ Quien acompañe al robot, detrás o a un lado a más de 0.5 m (a < 0.35 m de los
 - comprobar_pose: si más del 5 % de los scans tiene lecturas a menos de obstacle_min_range, avisa (limpia la
   ventana del LiDAR) y no escribe la pose.
 - real.yaml: max_linear_speed 0.12 (antes 0.08). Siguiente paso 0.15 si la ruta sale bien.
+
+## Rumbo de cada pared en A (sin robot, `rumbo_por_pared.py`, bag `fase1_20261105_153312`)
+| Ventana | Fondo (cara X) | Izquierda (cara Y) | Diferencia |
+|---|---|---|---|
+| 15:33:47 | 2.908° | 1.161° | 1.747° |
+| 15:34:30 | 2.906° | 1.196° | 1.710° |
+| 15:35:30 | 2.911° | 1.144° | 1.767° |
+| 13:51 | 2.571° | 0.796° | 1.775° |
+Sistemático: las paredes no son perpendiculares (vistas a la altura de la canaleta). Decisión: rumbo solo con la
+pared izquierda (`pose_heading_axis: "Y"`) y `lidar_yaw_offset: 0`.
+
+## Ruta completa nº 3 a 0.12 m/s (15:48:56-15:53:30) — `mission_log_ruta_completa_3.csv`, bag `fase1_20261105_153312`
+- Salida: /imu 0, deriva +0.003° en 10 s, pose (0.684, 0.907, 0.23°).
+- Rodeo cerca de B; D 6.7 cm; antes de E, BLOQUEO por algo en (5.29, 5.91) y 3 replanificaciones; E 1.9 cm (según el
+  robot); rodeo después de E (el replan se saltó E-Door_1).
+- 15:51:31: BLOQUEO delante de la puerta por "algo" en (6.20, 11.50) y SIN_CAMINO cada 5 s. Parado.
+- Lanzado por Claude en segundo plano: el Ctrl+C (SIGINT) se ignoraba (`&` en un script no interactivo). Se paró con
+  SIGTERM y velocidad cero publicada a mano. Desde ahora el robot real lo lanza Marc en su terminal.
+- Diagnóstico (`puerta_vivo.py`, comprobar_pose en vivo, `reloc_bag.py`):
+  - Pose real por las paredes (5.832, 11.004) frente a la creída (5.696, 11.017): 13.6 cm de error en X tras ~17 m.
+  - El LiDAR ve pared hasta Y ~ 11.48 en el lado de la puerta con Y menor; el mapa pone el hueco desde 11.27. Hueco libre
+    ~0.52 m: Door (Y 11.68) queda a 0.18-0.20 m del borde, menos de lo que pide el planificador. PENDIENTE: medir.
+  - La relocalización (como en el nodo) sobre 3 ventanas del bag: ACEPTADA, dx +0.136, dy -0.013, dth +0.38°.
+
+## Cambios tras la ruta nº 3
+- comprobar_pose: rumbo solo con la pared izquierda; aviso del giróscopo obligatorio (|w| medio de /imu > 0.01 rad/s
+  o deriva del rumbo de /odom > 0.2° en la ventana: "reinicia la OpenCR" y no escribe).
+- fase1_node: estado RELOC en E-Door_1 (eventos RELOC / RELOC_RECHAZADA <motivo>); los puntos de relocalización se
+  conservan al replanificar.
+- Tests: test_reloc.py (scans sintéticos con las caras del mapa) y casos del giróscopo. 29 tests.
