@@ -6,7 +6,7 @@
 # Ej.:  docker/reproducir_bag.sh fase1_20261106_171005 prueba_aproximacion_R.yaml
 cd "$(dirname "$0")/.." || exit 1
 mkdir -p bags/replay
-docker run --rm -v "$PWD":/ws/src/rob-autonomous-nav:ro -v "$PWD/bags/replay":/replay rob-jazzy bash -c "
+docker run --rm --network none -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -v "$PWD":/ws/src/rob-autonomous-nav:ro -v "$PWD/bags/replay":/replay rob-jazzy bash -c "
   source /opt/ros/jazzy/setup.bash && cd /ws &&
   colcon build --packages-select autonomous_nav > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
   source install/setup.bash

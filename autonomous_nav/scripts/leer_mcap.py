@@ -1,5 +1,6 @@
 # Lector mínimo de bags MCAP (los de `ros2 bag record`) SIN ROS: para analizar los bags en el portátil.
-# Solo la librería estándar y numpy. Decodifica /scan (LaserScan), /odom (Odometry) y /tf (TFMessage) en CDR.
+# Solo la librería estándar y numpy. Decodifica /scan (LaserScan), /odom (Odometry), /tf (TFMessage) y /map
+# (OccupancyGrid) en CDR.
 # Script OFFLINE: no lo usa ningún nodo (en el PC del laboratorio, con ROS, vale rosbag2_py).
 # Uso como módulo:
 #   from leer_mcap import leer
@@ -86,7 +87,23 @@ def tf(d):
     return lista
 
 
-DECODIFICAR = {'sensor_msgs/msg/LaserScan': scan, 'nav_msgs/msg/Odometry': odom, 'tf2_msgs/msg/TFMessage': tf}
+def mapa(d):
+    # OccupancyGrid: info (resolución, ancho, alto, origen) y data (int8: -1 desconocido, 0-100 ocupado)
+    c = Cdr(d)
+    m = {'header': c.cabecera()}
+    c.num('i', 4)
+    c.u32()                     # map_load_time
+    m['resolution'] = c.f32()
+    m['width'] = c.u32()
+    m['height'] = c.u32()
+    m['origin'], m['origin_q'] = pose(c)
+    n = c.u32()
+    m['data'] = np.frombuffer(c.d, np.int8, n, c.p).reshape(m['height'], m['width'])
+    return m
+
+
+DECODIFICAR = {'sensor_msgs/msg/LaserScan': scan, 'nav_msgs/msg/Odometry': odom, 'tf2_msgs/msg/TFMessage': tf,
+               'nav_msgs/msg/OccupancyGrid': mapa}
 
 
 def descomprimir(datos, metodo):

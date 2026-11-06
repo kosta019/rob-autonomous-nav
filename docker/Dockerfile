@@ -2,5 +2,5 @@
 # Construir:  docker build -t rob-jazzy docker/
 # Usar:       docker/tests.sh
 FROM ros:jazzy-ros-base
-RUN apt-get update && apt-get install -y --no-install-recommends python3-pytest python3-scipy python3-pil ros-jazzy-rosbag2-storage-mcap \
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pytest python3-scipy python3-pil ros-jazzy-rosbag2-storage-mcap ros-jazzy-slam-toolbox \
     && rm -rf /var/lib/apt/lists/*
