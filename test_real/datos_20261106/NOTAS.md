@@ -238,8 +238,8 @@ E a 1 cm; `RELOC_ADELANTADA` dy −0.407 Y=canaleta y la segunda 3 cm; sin bloqu
 el mundo vacío abierto en el PC, dominio 11, sin bridge: no interfirió). Había un /map con publicador y /tf con 2: un
 SLAM de alguien en el dominio 11 (fase1_node no los usa).
 
-- **Q dado por tapado (`OBLIGATORIO_TAPADO Q 0.073`)**: tras la primera RELOC_Q, la pared de la derecha de Q se ve donde
-  está (Y ≈ 14.00, puntos en X 8.64-9.28) y el mapa la tiene en 13.78: esa franja sale como obstáculo nuevo a 0.5 m de Q,
-  BLOQUEO, SIN_CAMINO, a los 5 s Q~. El final, bien (1.9 cm), pero el log da 7.3 cm en Q. **Arreglo propuesto: zona
-  prohibida X 8.60-9.53, Y 13.78-14.00 (la pared donde la mide la cinta) y regenerar la ruta.** En las rutas 9 y 10 no
-  pasó por suerte.
+- **Q dado por tapado (`OBLIGATORIO_TAPADO Q 0.073`): otro robot se cruzó junto a Q** (Marc lo vio). BLOQUEO por un
+  obstáculo en (8.85, 14.30), a 0.2 m de Q, con más puntos en Y 14.26-14.35 (X 8.69-9.10): un objeto de 15-20 cm. A los
+  5 s Q~ a 7.3 cm, RELOC_Q ~1 cm allí, y la pose final a 1.9 cm. Correcto. (La pared de la derecha de Q también sale como
+  obstáculo nuevo tras la RELOC_Q, en Y ≈ 14.00 donde la mide la cinta y no en 13.78 como el mapa, pero a 0.5 m de Q:
+  no bloquea. Si alguna vez molesta, zona prohibida X 8.60-9.53, Y 13.78-14.00.)
