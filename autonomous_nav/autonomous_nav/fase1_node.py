@@ -562,9 +562,15 @@ class Fase1Node(Node):
         # 'extra' agranda las dos distancias: en ESPERAR, para dar la ruta por libre se pide ese margen
         # de más (histéresis; sin ella, un obstáculo justo en el límite hace parpadear bloqueo/libre).
         # Devuelve su posición, o None si la ruta está libre.
+        # Solo hasta el siguiente obligatorio (o su sustituto, o la pose final): lo de después aún no se ha replanificado
+        # y se comprueba al llegar allí. Si no, un obstáculo junto al obligatorio bloquea el tramo siguiente y el replan,
+        # que solo llega hasta el obligatorio, no lo arregla nunca (bucle BLOQUEO/REPLANIFICACION junto a E, 06/11).
         if not self.obstaculos:
             return None
-        puntos = [(x, y)] + [(o[1], o[2]) for o in self.objetivos[self.i_objetivo:]]
+        resto = self.objetivos[self.i_objetivo:]
+        k = next((k for k, o in enumerate(resto)
+                  if o[0] in self.obligatorios or o[0] in self.sustitutos or o[0] == 'final'), len(resto) - 1)
+        puntos = [(x, y)] + [(o[1], o[2]) for o in resto[:k + 1]]
         muestras = []
         restante = self.alcance_bloqueo + extra
         for (ax, ay), (bx, by) in zip(puntos, puntos[1:]):
