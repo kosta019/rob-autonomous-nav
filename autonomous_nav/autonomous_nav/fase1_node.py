@@ -489,6 +489,19 @@ class Fase1Node(Node):
         self.objetivos.append(('final', self.pose_final[0], self.pose_final[1], self.tol_obligatorio))
         self.i_objetivo = 0
         self.estado = 'GIRAR'
+        self.fase = 'I'             # current_phase del Mission Log
+        # Fase II en el mismo lanzamiento (phase2_enabled): al acabar la fase I, parado phase2_start_delay s, la ruta de
+        # cobertura del pasillo y la vuelta a P Base (phase2_final_pose)
+        self.fase2_activa = self.declare_parameter('phase2_enabled', Parameter.Type.BOOL).value
+        self.fase2_nombres = self.declare_parameter('phase2_waypoint_names', SA).value
+        self.fase2_x = self.declare_parameter('phase2_waypoints_x', DA).value
+        self.fase2_y = self.declare_parameter('phase2_waypoints_y', DA).value
+        self.fase2_final = self.declare_parameter('phase2_final_pose', DA).value
+        self.fase2_espera = self.declare_parameter('phase2_start_delay', D).value
+        self.fase2_max_v = self.declare_parameter('phase2_max_linear_speed', D).value
+        if not (len(self.fase2_nombres) == len(self.fase2_x) == len(self.fase2_y)):
+            raise ValueError('phase2_waypoint_names, phase2_waypoints_x y phase2_waypoints_y: misma longitud')
+        self.t_pausa = None
         # Salida desde B, C o D (06/11: la demo puede empezar en A, B, C o D, con paneles de madera movidos como obstáculos
         # por la zona de salida). start_after: se quitan los waypoints hasta ese inclusive (B para B y C; D para D).
         # plan_at_start: parado, start_scans scans para llenar la memoria de obstáculos y planificar desde la pose inicial
@@ -829,18 +842,39 @@ class Fase1Node(Node):
         self.t_sin_camino = None
         self.estado = 'GIRAR'
 
-    def planificar_final(self, x, y, th):
+    def empezar_fase2(self, x, y, th):
+        # Objetivos de la fase II: la ruta de cobertura y P Base. Todos sus puntos son anclas (un replan no se salta una
+        # pasada). Solo se planifica el primer tramo, y solo si queda lejos (la pose final de la fase I puede no ser Q):
+        # planificar las pasadas las llevaría al centro del pasillo (el planificador busca holgura) y dejarían de cubrirlo.
+        self.fase = 'II'
+        self.objetivos = [(n, px, py, self.tol_waypoint) for n, px, py in zip(self.fase2_nombres, self.fase2_x,
+                                                                              self.fase2_y)]
+        self.objetivos.append(('final', self.fase2_final[0], self.fase2_final[1], self.tol_obligatorio))
+        self.i_objetivo = 0
+        self.pose_final = self.fase2_final
+        self.anclas = list(self.fase2_nombres)
+        self.obligatorios = self.fase2_nombres[:1]   # replanificar va hasta el siguiente obligatorio: el primer tramo
+        self.max_v = self.fase2_max_v
+        self.estado = 'GIRAR'
+        self.get_logger().info(f'FASE II: {self.fase2_nombres} y P Base')
+        self.escribir_log(x, y, th, 'FASE II INICIO')
+        if self.fase2_nombres and math.hypot(self.fase2_x[0] - x, self.fase2_y[0] - y) > self.plan_final_dist:
+            self.planificar_final(x, y, th, 'FASE2')
+
+    def planificar_final(self, x, y, th, nombre='FINAL'):
+        # Planifica hasta el siguiente obligatorio (la pose final, o el primer punto de la fase II). Eventos del log:
+        # PLAN_<nombre> o <nombre>_SIN_CAMINO.
         inflado, segundos = self.replanificar(x, y)
         if inflado is None:
             ahora = self.get_clock().now().nanoseconds * 1e-9
-            self.get_logger().warn('Sin camino a la pose final: espero y reintento')
-            self.escribir_log(x, y, th, 'FINAL_SIN_CAMINO', segundos)
+            self.get_logger().warn(f'Sin camino ({nombre}): espero y reintento')
+            self.escribir_log(x, y, th, f'{nombre}_SIN_CAMINO', segundos)
             self.estado = 'ESPERAR'
             self.t_espera = ahora
             self.t_sin_camino = ahora
             return
-        self.get_logger().info(f'Plan a la pose final con inflado {inflado:.2f}')
-        self.escribir_log(x, y, th, f'PLAN_FINAL inflado={inflado:.2f}', segundos)
+        self.get_logger().info(f'Plan ({nombre}) con inflado {inflado:.2f}')
+        self.escribir_log(x, y, th, f'PLAN_{nombre} inflado={inflado:.2f}', segundos)
 
     def inicio(self, x, y, th, ahora):
         # Estado INICIO (robot parado): start_scans scans nuevos llenan la memoria de obstáculos (actualizar_obstaculos ya
@@ -1177,12 +1211,21 @@ class Fase1Node(Node):
         if self.estado == 'FIN':
             return 0.0, 0.0
 
+        if self.estado == 'PAUSA':
+            # Entre la fase I y la II, parado
+            if self.get_clock().now().nanoseconds * 1e-9 - self.t_pausa >= self.fase2_espera:
+                self.empezar_fase2(x, y, th)
+            return 0.0, 0.0
+
         if self.estado == 'ORIENTAR':
             error = normalizar(self.pose_final[2] - th)
             if abs(error) < self.tol_final_yaw:
+                self.get_logger().info(f'FASE {self.fase} COMPLETADA')
+                self.escribir_log(x, y, th, f'FASE {self.fase} COMPLETADA', error)
                 self.estado = 'FIN'
-                self.get_logger().info('FASE I COMPLETADA')
-                self.escribir_log(x, y, th, 'FASE I COMPLETADA', error)
+                if self.fase == 'I' and self.fase2_activa:
+                    self.estado = 'PAUSA'
+                    self.t_pausa = self.get_clock().now().nanoseconds * 1e-9
                 return 0.0, 0.0
             return 0.0, limitar(self.k_angular * error, self.max_w)
 
@@ -1256,7 +1299,7 @@ class Fase1Node(Node):
         def r3(v):
             return '' if v is None else round(v, 3)
         t = self.get_clock().now().nanoseconds * 1e-9  # en Gazebo, tiempo simulado
-        self.csv.writerow([round(t, 3), 'I', r3(x), r3(y), r3(th), self.estado, evento,
+        self.csv.writerow([round(t, 3), self.fase, r3(x), r3(y), r3(th), self.estado, evento,
                            r3(error), r3(ox), r3(oy), *self.yaws_log()])
         self.fichero.flush()  # que no se pierda nada con un Ctrl+C
 

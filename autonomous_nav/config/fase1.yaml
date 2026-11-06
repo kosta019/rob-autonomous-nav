@@ -61,6 +61,18 @@ fase1_node:
     obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria (el scan llega con retraso
                                  #   y las paredes aparecen desplazadas: con 0.8 rad/s se veían obstáculos falsos)
 
+    # ---------- Fase II en el mismo lanzamiento ----------
+    phase2_enabled: false        # true: al acabar la fase I sigue con la II (misión completa: -p phase2_enabled:=true)
+    phase2_start_delay: 3.0      # s parado en la pose final de la fase I antes de empezar la II
+    # Ruta de cobertura (prueba del 06/11, test_real/prueba_pasillo.yaml): dos pasadas a lo largo de todo el pasillo,
+    # en Y 14.35 y 15.55 de X 8.80 a 0.10. El 97 % del pasillo libre queda a <= 1.2 m de la ruta (una pata de 5 cm da
+    # 2-3 puntos del LiDAR): encuentra las estaciones estén donde estén. Tramos con >= 0.55 m de holgura en el mapa.
+    phase2_waypoint_names: ["P1_e", "P1_o", "P2_o", "P2_e"]
+    phase2_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
+    phase2_waypoints_y:    [14.35, 14.35, 15.55, 15.55]
+    phase2_final_pose: [3.34, 15.70, 0.0]   # P Base (enunciado; medida con cinta el 06/11: coincide). θ: TODO, sin dato
+    phase2_max_linear_speed: 0.12   # m/s: estaciones y gente en cualquier sitio del pasillo
+
     # ---------- Pilares de las estaciones de carga (fase II, pilares.py) ----------
     pillar_zone: [-0.55, 9.57, 13.00, 17.15]   # [x_min, x_max, y_min, y_max]: el pasillo exterior (paredes medidas el
                                  #   06/11: fondo X 9.57, extintor Y 17.15; mapa: X -0.55, Y 13.00 en la parte ancha).

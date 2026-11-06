@@ -1,0 +1,13 @@
+# Para reproducir solo la fase II de un bag (docker/reproducir_bag.sh con OFFSET y -p phase2_enabled:=true): fase I
+# trivial, ya en Q (el robot grabado está parado en Q), para que el nodo empiece la fase II cuando el robot la empezó.
+fase1_node:
+  ros__parameters:
+    initial_pose: [8.970, 14.497, 0.0]
+    waypoint_names: ["Q"]
+    waypoints_x: [8.970]
+    waypoints_y: [14.497]
+    mandatory_waypoints: ["Q"]
+    planning_sequence: ["Q"]
+    final_pose: [8.970, 14.497, 0.0]
+    reloc_q_at: ""
+    map_corr_mode: "apagado"

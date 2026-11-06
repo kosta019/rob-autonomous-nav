@@ -65,8 +65,14 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
    (usuario): corregir la pose en el pasillo con sus paredes medidas (como `ajuste_mapa` en la sala) en vez del SLAM.
 3. **Mapa entregable.** El del 06/11 sale con el pasillo girado. Offline salen mucho mejor con el scan resellado
    −0.1 s o sin emparejar scans (figura en el análisis). Falta decidir cuál y volver a grabarlo en el laboratorio.
-4. **Integrar la fase II en el nodo**: `current_phase` = II en el log (ahora siempre "I"), fases I y II en un solo
-   lanzamiento (ahora dos con Ctrl+C entre medias), ruta de cobertura tras Q, vuelta a P Base, guardar el mapa.
+4. **Integrar la fase II en el nodo: HECHO en parte** (rama `fase2-pilares`, sin probar en el robot). Con
+   `-p phase2_enabled:=true`, al acabar la fase I: PAUSA (`phase2_start_delay`), `FASE II INICIO`, ruta de cobertura
+   (`phase2_*` en `fase1.yaml`) y P Base; `current_phase` = II en el log. Solo se planifica el primer tramo (si la pose
+   final de la fase I queda lejos de P1_e): planificar las pasadas las llevaría al centro del pasillo. Comprobado
+   reproduciendo el bag de las 16:31 desde Q (`OFFSET=340 docker/reproducir_bag.sh ... docker/fase2_desde_Q.yaml`):
+   P1_e, P1_o, P2_o y las dos estaciones en fase II; después el replan diverge del robot grabado (lazo abierto: una
+   reproducción solo vale mientras el nodo decide lo mismo que en el laboratorio). Falta: guardar el mapa al llegar a
+   P Base (ahora a mano, README_DEMO 5) y, si se quiere, acortar la ruta al encontrar la estación cuadrada.
 5. **Pose final asignada por el profesor**: HECHO en código (06/11, al final): si `final_pose` queda a más de
    `final_plan_dist` (0.30 m) de Q, al pasar Q se planifica hasta ella (`PLAN_FINAL` / `FINAL_SIN_CAMINO`); antes iba en
    línea recta (al vestíbulo, p. ej. (7.5, 12.6), cruzaba una pared). En README_DEMO ("Pose final"). **Sin probar en el

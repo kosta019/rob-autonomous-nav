@@ -120,10 +120,19 @@ con la esquina, se acerca ~20 cm y repite) → gira a θ = 0 → `FASE I COMPLET
 | Va pegado a una pared, o se acerca a < 30 cm de algo | — | **interruptor de la OpenCR** |
 | Oscila parado (GIRAR/AVANZAR sin avanzar) | rumbo del IMU saltando (tirones) | Ctrl+C, apagar y encender la OpenCR, 10 s quieto |
 
-Al acabar: **Ctrl+C en el nodo** (sin mover el robot si sigue la fase II).
+Al acabar: **Ctrl+C en el nodo** (sin mover el robot si sigue la fase II). Con `phase2_enabled:=true` no hace
+falta: sigue solo con la fase II.
 
-## 4. Fase II (prototipo; terminal 3, robot en Q donde acabó la fase I)
+## 4. Fase II
 
+**Misión completa (fases I y II en un solo lanzamiento):** el comando de la fase I (3.1 o 3.2) con
+`-p phase2_enabled:=true` al final. Al acabar la fase I (`FASE I COMPLETADA`) se para 3 s (`phase2_start_delay`),
+escribe `FASE II INICIO` y sigue con la ruta de cobertura de `fase1.yaml` (`phase2_*`) hasta P Base
+(`FASE II COMPLETADA`). Desde ahí, `current_phase` es `II` en el Mission Log. Si la pose final de la fase I no está junto
+al primer punto de la ruta (P1_e), planifica hasta él (`PLAN_FASE2`; sin camino, `FASE2_SIN_CAMINO` y reintenta).
+Comprobado reproduciendo el bag del ensayo del 06/11 (`docker/reproducir_bag.sh`); **sin probar en el robot**.
+
+**Solo la fase II** (terminal 3, robot en Q donde acabó la fase I):
 ```bash
 ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --params-file $CFG/real.yaml \
   --params-file src/rob-autonomous-nav/test_real/prueba_pasillo.yaml
@@ -137,8 +146,8 @@ ha visto una en 5 scans, el Mission Log y la terminal dicen dónde está:
 - seguidas de una fila `PILAR` por pata, con su posición en `obstacle_x/obstacle_y`.
 
 La posición es la de la pose del robot en ese momento: hereda su error (en el pasillo, sin SLAM, ~10 cm).
-**Limitaciones:** el log sigue diciendo fase "I", la ruta no cambia al encontrar la estación, y llega a P Base con
-~15-20 cm de error (sin corrección en el pasillo).
+**Limitaciones:** con `prueba_pasillo.yaml` el log dice fase "I" (es otro lanzamiento de la fase I); la ruta no cambia al
+encontrar la estación; llega a P Base con ~15-20 cm de error (sin corrección en el pasillo).
 
 ## 5. Guardar el mapa del SLAM (al llegar a P Base, con el SLAM aún en marcha)
 
