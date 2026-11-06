@@ -1074,7 +1074,9 @@ class Fase1Node(Node):
         # LLEGADO: se comprueba antes que nada, esté girando o avanzando
         nombre, ox, oy, tol = self.objetivos[self.i_objetivo]
         dist = math.hypot(ox - x, oy - y)
-        es_q = nombre == self.reloc_q_en or self.sustitutos.get(nombre, ('',))[0] == self.reloc_q_en   # también Q~
+        # También Q~. Con reloc_q_at "" no se relocaliza nunca (06/11: '' coincidía con cualquier waypoint sin sustituto)
+        es_q = bool(self.reloc_q_en) and (nombre == self.reloc_q_en
+                                          or self.sustitutos.get(nombre, ('',))[0] == self.reloc_q_en)
         if dist < tol and es_q and self.reloc_q_hechas < self.reloc_q_veces:
             # En Q: relocalizar con la esquina antes de darlo por alcanzado; luego se vuelve a ir a Q con la pose nueva
             self.reloc_q_hechas += 1

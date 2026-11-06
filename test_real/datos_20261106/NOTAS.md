@@ -243,3 +243,19 @@ SLAM de alguien en el dominio 11 (fase1_node no los usa).
   5 s Q~ a 7.3 cm, RELOC_Q ~1 cm allí, y la pose final a 1.9 cm. Correcto. (La pared de la derecha de Q también sale como
   obstáculo nuevo tras la RELOC_Q, en Y ≈ 14.00 donde la mide la cinta y no en 13.78 como el mapa, pero a 0.5 m de Q:
   no bloquea. Si alguna vez molesta, zona prohibida X 8.60-9.53, Y 13.78-14.00.)
+
+## Fase II: prueba con las estaciones (16:08-16:18)
+
+`test_real/prueba_estaciones.yaml`: de Q, rodear por el sur R y T a 1 m (y una pasada de frente a 0.75 m), 0.10 m/s, sin
+corrección con el mapa (el PC está dentro y el pasillo fuera: sin teleop). Fotos: `foto_estacion_R.jpg`, `foto_estacion_T.jpg`.
+Medidas en `CLAUDE.md` (patas Ø 5 cm, 49 cm de extremo a extremo = 44 entre centros, 25 cm libres debajo).
+
+- 1.er intento (`mission_log_prueba_estaciones_parcial.csv`, `bag_fase1_20261106_161052`): lanzado antes del bag (solo
+  T grabado) y **fallo: con `reloc_q_at: ""` relocalizó con la esquina de Q en R_e1** ('' coincidía con cualquier
+  waypoint). Arreglado (+ test).
+- 2.º (`mission_log_prueba_estaciones.csv`, `bag_fase1_20261106_161359`): completa en 3:39, sin bloqueos. OBSTACULO: 9
+  junto a R, 8 junto a T.
+- Acumulando el LiDAR de toda la pasada (pose de la odometría): **en T, tres grupos a 44, 44 y 42 cm** (las tres patas);
+  su centro a ~18 cm de la cruz de T (deriva de la pose). En R, un borrón: la deriva al acumular mezcla las patas →
+  el detector tiene que trabajar scan a scan (o con pocos scans) y situar la estación por sus patas, no por la pose.
+- `range_max` 3.5 m; una pata da 2-3 puntos a ≤ 1.2 m.

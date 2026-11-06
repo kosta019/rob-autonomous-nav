@@ -1,0 +1,4 @@
+{
+  "test/test_planificador.py::test_holgura_1cm[C-2.08]": true,
+  "test/test_planificador.py::test_holgura_1cm[G-0.86]": true
+}

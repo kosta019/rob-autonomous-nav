@@ -1,0 +1,25 @@
+# Prueba (06/11): de Q, rodear por el sur las dos estaciones de carga a 1 m (y una pasada de frente a 0.75 m) para grabar
+# un bag con el que desarrollar el detector de pilares de la fase II. Sin teleop: el PC está dentro y el pasillo fuera.
+# El norte de R es la pared (Y 16.90) y el de T la zona de suelo irregular (estimada, Y 15.85): no se rodean.
+# Tramos comprobados sobre el mapa: holgura >= 0.48 m, a >= 0.93 m del centro de cada estación (0.75 en las pasadas).
+# Las estaciones NO están en el mapa: sus patas salen como OBSTACULO y, si molestan, BLOQUEO/replan como cualquier obstáculo.
+# Uso, con el robot sobre la cruz de Q mirando a +X (último --params-file):
+#   ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --params-file $CFG/real.yaml \
+#     --params-file src/rob-autonomous-nav/test_real/prueba_estaciones.yaml
+fase1_node:
+  ros__parameters:
+    initial_pose: [8.970, 14.497, 0.0]
+    waypoint_names: ["R_e1", "R_se1", "R_s1", "R_s075", "R_s1b", "R_sw1", "R_w1", "R_sw1b",
+                     "T_e1", "T_se1", "T_s1", "T_s075", "T_s1b", "T_sw1", "T_w1"]
+    waypoints_x:    [8.50, 8.21, 7.50, 7.50, 7.50, 6.79, 6.50, 6.79,
+                     3.14, 2.84, 2.14, 2.14, 2.14, 1.43, 1.14]
+    waypoints_y:    [16.17, 15.46, 15.17, 15.42, 15.17, 15.46, 16.17, 15.46,
+                     15.30, 14.59, 14.30, 14.55, 14.30, 14.59, 15.30]
+    mandatory_waypoints: ["T_w1"]
+    # Todos como anclas: si replanifica, que no se salte la vuelta a las estaciones
+    planning_sequence: ["R_e1", "R_se1", "R_s1", "R_s075", "R_s1b", "R_sw1", "R_w1", "R_sw1b",
+                        "T_e1", "T_se1", "T_s1", "T_s075", "T_s1b", "T_sw1", "T_w1"]
+    final_pose: [1.14, 15.30, 0.0]
+    reloc_q_at: ""               # sin relocalización en Q (es la salida)
+    map_corr_mode: "apagado"     # en el pasillo el mapa está mal en Y
+    max_linear_speed: 0.10       # despacio: nadie lo ve desde el PC

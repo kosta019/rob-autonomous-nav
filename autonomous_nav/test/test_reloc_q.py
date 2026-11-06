@@ -166,3 +166,12 @@ def test_rampa_acelera_poco_a_poco_y_frena_de_golpe():
     assert pasos == 10
     assert rampa(0.0, 0.20, 0.02) == 0.0    # parada: inmediata
     assert rampa(0.05, 0.20, 0.02) == 0.05
+
+
+def test_sin_reloc_q_no_relocaliza_en_ningun_waypoint():
+    # 06/11 16:08: con reloc_q_at "" relocalizó con la esquina de Q en R_e1
+    n = nodo_q()
+    n.reloc_q_en = ''
+    n.objetivos = [('R_e1', 8.50, 16.17, 0.07), ('final', 1.14, 15.30, 0.02)]
+    Fase1Node.maquina_estados(n, 8.50, 16.17, 0.0)
+    assert n.estado != 'RELOC' and n.i_objetivo == 1
