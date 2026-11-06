@@ -64,10 +64,11 @@ def test_inflado_033_cierra_la_puerta(datos):
     assert pl.holgura_en(h5, meta5, *puntos['Door']) <= 0.33
 
 
-def test_base_bloqueada_con_inflado_020(datos):
-    # Problema de la fase II (no de la I): con el suelo irregular estimado, P Base queda dentro del inflado
+def test_base_alcanzable_con_inflado_025(datos):
+    # Hasta el 06/11, con el suelo irregular estimado (Y desde 15.85), P Base quedaba dentro del inflado (<= 0.20).
+    # Medido (Y desde 16.52): libre con el inflado normal
     p, h1, meta1, h5, meta5, puntos = datos
-    assert pl.holgura_en(h5, meta5, *puntos['Base']) <= 0.20
+    assert pl.holgura_en(h5, meta5, *puntos['Base']) > 0.25
 
 
 @pytest.mark.parametrize('k, longitud', [(0, 2.53), (1, 2.32)])
