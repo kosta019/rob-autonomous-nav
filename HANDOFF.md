@@ -59,14 +59,12 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
    R y T, ninguna estación falsa. Las pasadas largas sitúan R a ~10 cm (deriva de la pose: lo arregla el SLAM).
    Herramientas sin ROS en el portátil: `scripts/leer_mcap.py`, `scripts/pilares_bag.py`; con Docker: `docker/tests.sh`
    (todos los tests) y `docker/reproducir_bag.sh` (el nodo con un bag grabado).
-2. **Localización con SLAM en el pasillo.** El usuario lo ha decidido. Comando que usan:
-   `ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false` (arrancado con el robot en A). En el bag de las
-   16:31 (`bag_fase1_20261106_163111`) están /tf con map→odom y /map: se puede desarrollar offline. Hay que fijar la
-   transformación mundo↔map con la pose de A al arrancar y que `pose_mundo()` la use (al menos en el pasillo). Sin esto
-   se llega a P Base con 15-20 cm de error (24 m sin corrección).
-3. **Mapa entregable.** El de `mapa_slam/mapa_fases_I_II_20261106.*` sale con el vestíbulo deformado (abanico) y el
-   pasillo girado respecto a la sala; origen en el sistema de /odom, no en A. Ajustar slam_toolbox (resolución, loop
-   closure, alcance 3.5 m) y volver a grabarlo en el laboratorio.
+2. **Localización con SLAM en el pasillo: ANALIZADO, NO CONECTADO** (`docs/analisis_slam_20261106.md`). Pasando
+   slam_toolbox otra vez por el bag de las 16:31 con varias configuraciones, su pose sitúa R a 0.39-0.83 m de la cinta;
+   la del nodo, a 0.08. El scan llega ~0.1 s tarde (resellarlo mejora el SLAM, pero no basta). Pendiente de decidir
+   (usuario): corregir la pose en el pasillo con sus paredes medidas (como `ajuste_mapa` en la sala) en vez del SLAM.
+3. **Mapa entregable.** El del 06/11 sale con el pasillo girado. Offline salen mucho mejor con el scan resellado
+   −0.1 s o sin emparejar scans (figura en el análisis). Falta decidir cuál y volver a grabarlo en el laboratorio.
 4. **Integrar la fase II en el nodo**: `current_phase` = II en el log (ahora siempre "I"), fases I y II en un solo
    lanzamiento (ahora dos con Ctrl+C entre medias), ruta de cobertura tras Q, vuelta a P Base, guardar el mapa.
 5. **Pose final asignada por el profesor**: HECHO en código (06/11, al final): si `final_pose` queda a más de
