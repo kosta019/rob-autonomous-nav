@@ -1,0 +1,19 @@
+# Datos para la fase III (06/11): de la cruz de Q, ponerse delante de la estación R por el sur, mirándola (+Y), y
+# acercarse por pasos (centro a 1.0, 0.7 y 0.55 m del centro de R), para grabar lo que el LiDAR ve antes de aparcar.
+# Con R sin girar, las patas del lado sur están en Y 15.95: a 0.55 m del centro, el robot queda a 0.33 m de esa fila
+# (la parada de emergencia salta a 0.30 m del LiDAR por delante, que va 3 cm detrás del centro). No entra entre las patas.
+# Uso, con el robot sobre la cruz de Q mirando a +X (último --params-file):
+#   ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --params-file $CFG/real.yaml \
+#     --params-file src/rob-autonomous-nav/test_real/prueba_aproximacion_R.yaml
+fase1_node:
+  ros__parameters:
+    initial_pose: [8.970, 14.497, 0.0]
+    waypoint_names: ["R_s1", "R_s07", "R_s055"]
+    waypoints_x:    [7.50, 7.50, 7.50]
+    waypoints_y:    [15.17, 15.47, 15.62]
+    mandatory_waypoints: ["R_s055"]
+    planning_sequence: ["R_s1", "R_s07", "R_s055"]
+    final_pose: [7.50, 15.62, 1.5708]   # mirando a la estación (+Y)
+    reloc_q_at: ""
+    map_corr_mode: "apagado"
+    max_linear_speed: 0.08

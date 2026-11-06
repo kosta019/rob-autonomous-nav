@@ -144,6 +144,16 @@ Hay **dos**: la buena es la del enunciado (cuadrada, 4 pilares); la otra, triang
   Medido: borde a 0.82 m de la cruz de P Base (Y 16.52), 4.85 m de largo (supuesto desde X −0.55: hasta X 4.30).
   P Base queda con 0.83 m de holgura. Fotos en `test_real/datos_20261106/foto_suelo_irregular_*.jpg`.
 
+### Pasillo: las coordenadas del enunciado NO valen (medido con cinta el 06/11, desde la cruz de Q)
+
+- **Cruz de R real: (7.17, 16.51)**, no (7.50, 16.17): de Q a R hay 1.80 m en X y 2.01 m en Y (cinta: R a la pared del
+  fondo 2.40, Q a esa pared 0.60; R a la pared del extintor 0.64, Q a ella 2.65). El detector en el bag de aproximación
+  la pone en (7.19, 16.48): coincide a ~3 cm. La odometría de Q a R, bien (~3 cm).
+- **Pared del extintor (larga, Y alto del pasillo): Y ≈ 17.15** (mapa 16.90). Pared del fondo (delante de Q): X 9.57.
+- R está **paralela a las paredes** y centrada en su cruz; T, centrada en su cruz, girada (sin medir).
+- T y P Base, sin medir: probablemente también desplazadas. La referencia en el pasillo es Q (relocalizada con su
+  esquina) + lo que ve el robot (pilares, SLAM), no las coordenadas del enunciado.
+
 ## Decisiones de diseño ya tomadas (no las reabras sin un motivo nuevo)
 
 - **Arquitectura híbrida** (teoría, diapositiva 9): un plan global sobre el mapa más una capa reactiva con el LiDAR que lo corrige.

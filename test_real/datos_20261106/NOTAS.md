@@ -299,3 +299,14 @@ Uso: `-p initial_pose:="[x, y, th]" -p start_after:=B -p plan_at_start:=true` (o
 - `comprobar_pose` en B y en C: **solo paredes del eje Y** (los paneles tapan la del fondo) → pose escrita a mano con la
   X de la cruz y la Y y θ medidas (README_DEMO.md, 3.2). En C, ecos a < 0.20 m: el panel pegado.
 - `salida_{B,C,D}.yaml` sin límite de velocidad (0.20 de `real.yaml`). D sin probar.
+
+## Aproximación a R (17:10) y el pasillo medido con cinta
+
+`test_real/prueba_aproximacion_R.yaml`, `mission_log_aproximacion_R.csv`, `bag_fase1_20261106_171005`: de Q (pose de
+salida comprobada con la esquina de Q en el bag: ±1 cm, −0.6°) a 0.55 m de R mirándola, 16 s parado.
+- En el scan en bruto, **las 4 patas**: 0.70 m a 8°, 0.88 a 37°, 1.14 a 4°, 1.23 a 24° → cuadrado de 42-44 cm. Centro
+  de la estación a 0.91 m delante y 0.31 a la izquierda → (7.19, 16.48) con la pose del robot. El prototipo de detector
+  (`scripts_tarde/pilares_scan.py`) solo saca 1 de 4 (los segmentos se pegan a lo de detrás): a mejorar.
+- **Cinta: R real en (7.17, 16.51)** (ver CLAUDE.md, "Pasillo"). Coincide con el detector a ~3 cm: **el enunciado/mapa
+  están mal en el pasillo ~(−0.33, +0.34)**; la odometría de Q a R, bien. El bag de las 16:14 dio el mismo desfase.
+- Fotos cenitales de R y T: `foto_estacion_R_cenital.jpg`, `foto_estacion_T_cenital.jpg`.
