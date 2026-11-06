@@ -228,6 +228,13 @@ def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy,
     return dx, dy, dth, n
 
 
+def quitar_hasta(objetivos, nombre):
+    # La lista de objetivos sin los que van hasta 'nombre' inclusive (salida desde B, C o D). '' o un nombre que no está:
+    # la lista entera.
+    nombres = [o[0] for o in objetivos]
+    return objetivos[nombres.index(nombre) + 1:] if nombre in nombres else objetivos
+
+
 def rampa(v, v_anterior, paso):
     # Al acelerar, como mucho 'paso' más que la velocidad anterior; al frenar (o parar), sin límite
     return min(v, v_anterior + paso) if v > v_anterior else v
@@ -473,6 +480,18 @@ class Fase1Node(Node):
         self.objetivos.append(('final', self.pose_final[0], self.pose_final[1], self.tol_obligatorio))
         self.i_objetivo = 0
         self.estado = 'GIRAR'
+        # Salida desde B, C o D (06/11: la demo puede empezar en A, B, C o D, con paneles de madera movidos como obstáculos
+        # por la zona de salida). start_after: se quitan los waypoints hasta ese inclusive (B para B y C; D para D).
+        # plan_at_start: parado, start_scans scans para llenar la memoria de obstáculos y planificar desde la pose inicial
+        # hasta el siguiente obligatorio (pasando por las anclas): así sale del encierro de paneles, estén como estén.
+        despues_de = self.declare_parameter('start_after', Parameter.Type.STRING).value
+        self.planificar_al_salir = self.declare_parameter('plan_at_start', Parameter.Type.BOOL).value
+        self.scans_salida = self.declare_parameter('start_scans', Parameter.Type.INTEGER).value
+        self.objetivos = quitar_hasta(self.objetivos, despues_de)
+        if self.planificar_al_salir:
+            self.estado = 'INICIO'
+        self.salida_scans = 0
+        self.salida_ultimo_scan = None
 
         # 3. Estimación de la pose (odometría + giróscopo) y cuándo llegó cada sensor (reloj del nodo)
         self.odom_anterior = None   # última lectura de /odom: (x, y, theta) en el sistema de /odom
@@ -758,6 +777,26 @@ class Fase1Node(Node):
         self.t_sin_camino = None
         self.estado = 'GIRAR'
 
+    def inicio(self, x, y, th, ahora):
+        # Estado INICIO (robot parado): start_scans scans nuevos llenan la memoria de obstáculos (actualizar_obstaculos ya
+        # corre en cada ciclo); luego, plan desde la pose inicial. Sin camino: ESPERAR, que reintenta como siempre.
+        if self.scan is not self.salida_ultimo_scan:
+            self.salida_ultimo_scan = self.scan
+            self.salida_scans += 1
+        if self.salida_scans < self.scans_salida:
+            return
+        inflado, segundos = self.replanificar(x, y)
+        if inflado is None:
+            self.get_logger().warn('Sin camino desde la salida: espero y reintento')
+            self.escribir_log(x, y, th, 'SALIDA_SIN_CAMINO', segundos)
+            self.estado = 'ESPERAR'
+            self.t_espera = ahora
+            self.t_sin_camino = ahora
+            return
+        self.get_logger().info(f'Plan desde la salida con inflado {inflado:.2f}: {[o[0] for o in self.objetivos]}')
+        self.escribir_log(x, y, th, f'PLAN_SALIDA inflado={inflado:.2f} obstaculos={len(self.obstaculos)}', segundos)
+        self.estado = 'GIRAR'
+
     def replanificar(self, x, y, sustituir=False, largo=True):
         # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
         # anclas que queden por el camino; después sigue la lista original.
@@ -1029,6 +1068,9 @@ class Fase1Node(Node):
         elif self.estado == 'RELOC':
             v, w = 0.0, 0.0
             self.relocalizar(x, y, th)
+        elif self.estado == 'INICIO':
+            v, w = 0.0, 0.0
+            self.inicio(x, y, th, ahora_s)
         else:
             v, w = self.maquina_estados(x, y, th)
 

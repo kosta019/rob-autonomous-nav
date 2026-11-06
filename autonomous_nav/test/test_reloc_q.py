@@ -175,3 +175,11 @@ def test_sin_reloc_q_no_relocaliza_en_ningun_waypoint():
     n.objetivos = [('R_e1', 8.50, 16.17, 0.07), ('final', 1.14, 15.30, 0.02)]
     Fase1Node.maquina_estados(n, 8.50, 16.17, 0.0)
     assert n.estado != 'RELOC' and n.i_objetivo == 1
+
+
+def test_salida_desde_b_c_o_d_quita_lo_que_queda_atras():
+    from autonomous_nav.fase1_node import quitar_hasta
+    obj = [(n, 0.0, 0.0, 0.07) for n in ('B', 'D', 'D-E_1', 'E', 'Door', 'Q', 'final')]
+    assert [o[0] for o in quitar_hasta(obj, 'B')] == ['D', 'D-E_1', 'E', 'Door', 'Q', 'final']
+    assert [o[0] for o in quitar_hasta(obj, 'D')] == ['D-E_1', 'E', 'Door', 'Q', 'final']
+    assert quitar_hasta(obj, '') == obj

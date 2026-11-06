@@ -1,0 +1,19 @@
+# Prototipo de la fase II (06/11): de Q, dos pasadas a lo largo de todo el pasillo (Y 14.35 y 15.55, de X 8.80 a 0.10)
+# y vuelta a P Base. El 97 % del pasillo libre queda a <= 1.2 m de la ruta (a esa distancia una pata de 5 cm da 2-3
+# puntos del LiDAR): sirve para encontrar las estaciones estén donde estén. Tramos con >= 0.55 m de holgura en el mapa.
+# Las estaciones no están en el mapa: si caen en la ruta, se esquivan como cualquier obstáculo (BLOQUEO/replan).
+# Uso, con el robot en Q (donde acaba la fase I), último --params-file:
+#   ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --params-file $CFG/real.yaml \
+#     --params-file src/rob-autonomous-nav/test_real/prueba_pasillo.yaml
+fase1_node:
+  ros__parameters:
+    initial_pose: [8.970, 14.497, 0.0]
+    waypoint_names: ["P1_e", "P1_o", "P2_o", "P2_e", "PBase"]
+    waypoints_x:    [8.80, 0.10, 0.10, 8.80, 3.34]
+    waypoints_y:    [14.35, 14.35, 15.55, 15.55, 15.70]
+    mandatory_waypoints: ["PBase"]
+    planning_sequence: ["P1_e", "P1_o", "P2_o", "P2_e", "PBase"]   # todos anclas: un replan no se salta las pasadas
+    final_pose: [3.34, 15.70, 0.0]
+    reloc_q_at: ""
+    map_corr_mode: "apagado"     # en el pasillo el mapa está mal en Y
+    max_linear_speed: 0.12       # estaciones y gente en cualquier sitio

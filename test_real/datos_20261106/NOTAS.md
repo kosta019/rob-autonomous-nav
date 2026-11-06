@@ -259,3 +259,28 @@ Medidas en `CLAUDE.md` (patas Ø 5 cm, 49 cm de extremo a extremo = 44 entre cen
   su centro a ~18 cm de la cruz de T (deriva de la pose). En R, un borrón: la deriva al acumular mezcla las patas →
   el detector tiene que trabajar scan a scan (o con pocos scans) y situar la estación por sus patas, no por la pose.
 - `range_max` 3.5 m; una pata da 2-3 puntos a ≤ 1.2 m.
+
+## Ensayo de las fases I y II con SLAM (16:31-16:42) — mapa entregable (borrador)
+
+SLAM: `ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false` (el comando del compañero) arrancado con el
+robot en A; mapa guardado al llegar a P Base con `ros2 run nav2_map_server map_saver_cli -f mapa_fases_I_II_20261106`
+→ **`mapa_slam/mapa_fases_I_II_20261106.{pgm,yaml}`** (borrador del entregable). Bag de todo: `bag_fase1_20261106_163111`.
+
+- **Fase I** (`mission_log_ensayo_fase1.csv`): A → Q en 2:51. Puerta: RELOC_PARCIAL → RELOC_REINTENTO → RELOC dy −0.394
+  Y=canaleta. RELOC_Q −0.277, +0.191, −3.3° y luego ~2 cm.
+- **Fase II, prototipo** (`test_real/prueba_pasillo.yaml`, `mission_log_ensayo_fase2_pasillo.csv`): de Q, dos pasadas a
+  lo largo del pasillo (Y 14.35 y 15.55, X 8.80 ↔ 0.10; el 97 % del pasillo libre a ≤ 1.2 m) y a P Base: completa.
+  **En P Base, unos 15-20 cm de error** (`foto_PBase_ensayo.jpg`): 24 m sin ninguna corrección (la del mapa, apagada en el
+  pasillo). Esperado: falta localizarse en el pasillo (SLAM o paredes medidas).
+- Antes de lanzar la fase I seguía vivo el nodo de la prueba de las estaciones (16:14, en FIN, publicando v = 0): parado
+  a mano. **Ctrl+C en cada nodo antes del siguiente.**
+
+## Salida desde A, B, C o D (06/11)
+
+La demo puede empezar en A, B, C o D (θ quizá dado). **Alrededor de C hay paneles de madera** (~30 cm de alto, el LiDAR
+los ve como paredes; `foto_paneles_C_*.jpg`) que probablemente se moverán y se pondrán como obstáculos por la zona de
+salida. Implementado (sin probar en el robot): `start_after` ("B" para B y C, "D" para D) quita lo que queda atrás, y
+`plan_at_start: true` junta `start_scans` scans parado (memoria de obstáculos) y planifica desde la pose inicial hasta E
+(pasando por D). Con el planificador real, C encerrado en un cuadrado de paneles de 1.2 m: hueco de 50 cm → sin camino;
+60-70 cm → camino con inflado 0.20; 80 cm → 0.25. **El robot necesita huecos de ≥ 0.6 m.**
+Uso: `-p initial_pose:="[x, y, th]" -p start_after:=B -p plan_at_start:=true` (o un yaml por salida).

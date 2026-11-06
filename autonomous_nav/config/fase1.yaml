@@ -30,6 +30,10 @@ fase1_node:
     k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
     max_linear_accel: 0.20       # m/s²: la v sube como mucho esto por segundo (frenar, sin límite). 0 a 0.20 m/s en 1 s.
                                  #   06/11: sin rampa, a 0.20 el tirón hacía saltar el rumbo del IMU ~30° y oscilaba
+    start_after: ""              # salida: "" desde A; "B" desde B o C; "D" desde D (quita los waypoints hasta ese inclusive)
+    plan_at_start: false         # true: parado, junta start_scans scans (obstáculos) y planifica desde la pose inicial.
+                                 #   Para B, C y D (paneles de madera movibles por la zona de salida). Desde A no hace falta
+    start_scans: 6               # a 5 Hz, ~1.2 s
     k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
     turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar
     reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, volver a GIRAR
