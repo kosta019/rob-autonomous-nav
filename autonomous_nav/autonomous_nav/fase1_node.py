@@ -226,6 +226,85 @@ def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy,
     return dx, dy, dth, n
 
 
+def longitud_camino(puntos):
+    return float(sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(puntos, puntos[1:])))
+
+
+def rodeo_largo(nuevo, antes, ratio, extra):
+    # 06/11 15:10: con el pasillo de E a la puerta tapado (otro robot), el replan daba la vuelta por las mesas, hacia
+    # atrás. Un camino así de largo para un obstáculo que se mueve: mejor esperar a que se vaya.
+    return nuevo > ratio * antes + extra
+
+
+def recta_ransac(u, v, max_pendiente, tol=0.02, sep=0.20):
+    # Recta v = a + b*u con más puntos a < tol (pares de puntos separados más de sep en u, |b| <= max_pendiente),
+    # reajustada por mínimos cuadrados con esos puntos. Devuelve (a, b, máscara de inliers) o None.
+    mejor = (0, None)
+    for i in range(len(u)):
+        for j in range(i + 1, len(u)):
+            if abs(u[j] - u[i]) < sep:
+                continue
+            b = (v[j] - v[i]) / (u[j] - u[i])
+            if abs(b) > max_pendiente:
+                continue
+            dentro = np.abs(v - (v[i] + b * (u - u[i]))) < tol
+            if np.sum(dentro) > mejor[0]:
+                mejor = (int(np.sum(dentro)), dentro)
+    if mejor[1] is None:
+        return None
+    dentro = mejor[1]
+    for _ in range(2):
+        b, a = np.polyfit(u[dentro], v[dentro], 1)
+        dentro = np.abs(v - (a + b * u)) < tol
+    return float(a), float(b), dentro
+
+
+def ajuste_esquina(px, py, rx, ry, x_pared, y_pared, banda, alcance, max_rms, min_puntos, max_corr, max_ang,
+                   max_dif_ang, eje_rumbo='Y'):
+    # Relocalización con dos paredes perpendiculares medidas con cinta (06/11: la esquina junto a Q, x = x_pared delante
+    # e y = y_pared a un lado). Como comprobar_pose en A, pero sin el mapa, que detrás de la puerta está mal en Y (~0.3 m).
+    # px, py: lecturas al mundo con la pose creída (rx, ry). Cada pared: los puntos a menos de 'banda' de su recta y a
+    # menos de 'alcance' del robot a lo largo de ella; recta por RANSAC. El rumbo, la media (por puntos) del de las dos
+    # rectas; después, girando los puntos alrededor del robot, la distancia a cada pared da dx y dy.
+    # eje_rumbo: el rumbo sale solo de la pared de ese eje ('Y' = la recta y = y_pared, como pose_heading_axis en A;
+    # '' = las dos). En Q las dos paredes no son perpendiculares: ~3° entre ellas (bags del 06/11).
+    # Devuelve (dx, dy, dth, motivo, datos): motivo '' si vale; si no, por qué no se corrige.
+    datos = {'nx': 0, 'ny': 0, 'rms_x': None, 'rms_y': None, 'dth_x': None, 'dth_y': None}
+    pend = math.tan(max_ang)
+    sx = (np.abs(px - x_pared) < banda) & (np.abs(py - ry) < alcance)
+    sy = (np.abs(py - y_pared) < banda) & (np.abs(px - rx) < alcance)
+    rx_ = recta_ransac(py[sx], px[sx], pend) if np.sum(sx) >= 2 else None   # pared X: x = a + b*y
+    ry_ = recta_ransac(px[sy], py[sy], pend) if np.sum(sy) >= 2 else None   # pared Y: y = a + b*x
+    if rx_ is None or ry_ is None:
+        return 0.0, 0.0, 0.0, 'sin_pared_x' if rx_ is None else 'sin_pared_y', datos
+    xa, xb, xin = rx_
+    ya, yb, yin = ry_
+    qxx, qxy = px[sx][xin], py[sx][xin]     # puntos de la pared X
+    qyx, qyy = px[sy][yin], py[sy][yin]     # puntos de la pared Y
+    datos.update(nx=len(qxx), ny=len(qyx),
+                 rms_x=float(np.sqrt(np.mean((qxx - (xa + xb * qxy)) ** 2))),
+                 rms_y=float(np.sqrt(np.mean((qyy - (ya + yb * qyx)) ** 2))),
+                 dth_x=math.atan(xb), dth_y=-math.atan(yb))
+    if min(datos['nx'], datos['ny']) < min_puntos:
+        return 0.0, 0.0, 0.0, 'pocos_puntos', datos
+    if max(datos['rms_x'], datos['rms_y']) > max_rms:
+        return 0.0, 0.0, 0.0, 'residuo', datos
+    if abs(datos['dth_x'] - datos['dth_y']) > max_dif_ang:
+        return 0.0, 0.0, 0.0, 'angulos', datos
+    if eje_rumbo == 'Y':
+        dth = datos['dth_y']
+    elif eje_rumbo == 'X':
+        dth = datos['dth_x']
+    else:
+        dth = (datos['dth_x'] * datos['nx'] + datos['dth_y'] * datos['ny']) / (datos['nx'] + datos['ny'])
+    c, s = math.cos(dth), math.sin(dth)
+    dx = x_pared - float(np.mean(rx + c * (qxx - rx) - s * (qxy - ry)))
+    dy = y_pared - float(np.mean(ry + s * (qyx - rx) + c * (qyy - ry)))
+    if abs(dx) > max_corr or abs(dy) > max_corr or abs(dth) > max_ang:
+        return dx, dy, dth, 'grande', datos
+    return dx, dy, dth, '', datos
+
+
 class Fase1Node(Node):
     def __init__(self):
         super().__init__('fase1_node')
@@ -278,6 +357,21 @@ class Fase1Node(Node):
         self.reloc_comprobar_ang = math.radians(self.declare_parameter('reloc_check_angle_deg', D).value)
         self.reloc_max_ang = math.radians(self.declare_parameter('reloc_max_angle_deg', D).value)
         self.reloc_fin_canaleta = self.declare_parameter('reloc_duct_end_y', D).value
+        self.reloc_reintento_dist = self.declare_parameter('reloc_retry_dist', D).value
+        self.reloc_reintento_max = self.declare_parameter('reloc_retry_max', Parameter.Type.INTEGER).value
+        # Relocalización en Q con las dos paredes de la esquina (medidas con cinta), al llegar
+        self.reloc_q_en = self.declare_parameter('reloc_q_at', Parameter.Type.STRING).value
+        self.reloc_q_veces = self.declare_parameter('reloc_q_times', Parameter.Type.INTEGER).value
+        self.reloc_q_pared_x = self.declare_parameter('reloc_q_wall_x', D).value
+        self.reloc_q_pared_y = self.declare_parameter('reloc_q_wall_y', D).value
+        self.reloc_q_eje_rumbo = self.declare_parameter('reloc_q_heading_axis', Parameter.Type.STRING).value
+        self.reloc_q_banda = self.declare_parameter('reloc_q_band', D).value
+        self.reloc_q_alcance = self.declare_parameter('reloc_q_span', D).value
+        self.reloc_q_max_rms = self.declare_parameter('reloc_q_max_rms', D).value
+        self.reloc_q_min_puntos = self.declare_parameter('reloc_q_min_points', Parameter.Type.INTEGER).value
+        self.reloc_q_max_corr = self.declare_parameter('reloc_q_max_corr', D).value
+        self.reloc_q_max_ang = math.radians(self.declare_parameter('reloc_q_max_angle_deg', D).value)
+        self.reloc_q_max_dif = math.radians(self.declare_parameter('reloc_q_max_angle_diff_deg', D).value)
         # Corrección continua con el mapa de distancias. Modo: "apagado", "sombra" (calcula y registra, no aplica) o "activo"
         self.corr_modo = self.declare_parameter('map_corr_mode', Parameter.Type.STRING).value
         self.corr_cada = self.declare_parameter('map_corr_every_scans', Parameter.Type.INTEGER).value
@@ -312,6 +406,11 @@ class Fase1Node(Node):
         self.histeresis = self.declare_parameter('block_hysteresis', D).value
         self.espera = self.declare_parameter('obstacle_wait_time', D).value
         self.reintento = self.declare_parameter('replan_retry_period', D).value
+        # Rodeo largo: un camino nuevo más largo que replan_max_ratio * el que queda + replan_max_extra no se toma hasta
+        # llevar replan_long_detour_after s sin camino (un robot o una persona en el pasillo se va: mejor esperar)
+        self.rodeo_ratio = self.declare_parameter('replan_max_ratio', D).value
+        self.rodeo_extra = self.declare_parameter('replan_max_extra', D).value
+        self.rodeo_espera = self.declare_parameter('replan_long_detour_after', D).value
         # Obligatorio tapado: tras mandatory_cover_wait s sin camino, se va al punto libre más cercano a él (a menos de
         # mandatory_cover_radius) y se da por alcanzado (OBLIGATORIO_TAPADO). Nunca para los de mandatory_cover_exclude.
         self.tapado_radio = self.declare_parameter('mandatory_cover_radius', D).value
@@ -396,6 +495,11 @@ class Fase1Node(Node):
         self.sustitutos = {}        # nombre del sustituto -> (obligatorio, x, y)
         self.reloc_ultimo_scan = None
         self.reloc_adelantada = False   # ya se ha relocalizado por un bloqueo antes del waypoint (solo una vez)
+        self.reloc_tipo = 'puerta'      # qué relocalización hace el estado RELOC: 'puerta' (ajuste_puerta) o 'Q' (esquina)
+        self.reloc_puerta_total = False # ya ha salido una relocalización total en la puerta (si no, se reintenta)
+        self.reloc_reintentos = 0
+        self.reloc_q_hechas = 0
+        self.rodeo_rechazado = None     # (longitud nueva, la que quedaba) del último rodeo no aceptado
 
         # 4. Publicador y suscriptores (QoS como en la plantilla)
         qos_profile_b = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=10)
@@ -610,11 +714,23 @@ class Fase1Node(Node):
         if self.t_sin_camino is None:
             self.t_sin_camino = ahora
         sustituir = ahora - self.t_sin_camino >= self.tapado_espera
-        inflado, segundos = self.replanificar(x, y, sustituir)
+        largo = ahora - self.t_sin_camino >= self.rodeo_espera
+        self.rodeo_rechazado = None
+        inflado, segundos = self.replanificar(x, y, sustituir, largo)
         if inflado is None:
             self.get_logger().warn(f'Sin camino ({segundos:.2f} s): reintento en {self.reintento:.0f} s')
             self.escribir_log(x, y, th, 'SIN_CAMINO', segundos)
+            if self.rodeo_rechazado is not None:
+                nuevo, antes = self.rodeo_rechazado
+                self.get_logger().warn(f'Rodeo de {nuevo:.1f} m (quedaban {antes:.1f} m): espero')
+                self.escribir_log(x, y, th, f'RODEO_LARGO {nuevo:.2f} {antes:.2f}', nuevo)
             self.t_espera = ahora - self.espera + self.reintento   # el próximo intento, dentro de replan_retry_period
+            if self.reloc_reintentable(x, y):
+                self.reloc_reintentos += 1
+                self.get_logger().warn(f'Sin camino junto a la puerta sin relocalización total: relocalizo otra vez '
+                                       f'({self.reloc_reintentos}/{self.reloc_reintento_max})')
+                self.escribir_log(x, y, th, f'RELOC_REINTENTO {self.reloc_reintentos}')
+                self.empezar_reloc('puerta')
             return
         self.get_logger().info(f'Replanificado con inflado {inflado:.2f} m en {segundos:.2f} s: '
                                f'{[o[0] for o in self.objetivos[self.i_objetivo:]]}')
@@ -622,15 +738,18 @@ class Fase1Node(Node):
         self.t_sin_camino = None
         self.estado = 'GIRAR'
 
-    def replanificar(self, x, y, sustituir=False):
+    def replanificar(self, x, y, sustituir=False, largo=True):
         # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
         # anclas que queden por el camino; después sigue la lista original.
         # Devuelve (inflado usado, segundos), o (None, segundos) si no hay camino ni con el inflado mínimo.
         # sustituir: si el obligatorio está tapado, ir al punto libre más cercano a él (punto_sustituto).
+        # largo: si es False, un camino mucho más largo que el que quedaba (rodeo_largo) no vale: se prueba el inflado
+        # siguiente y, si ninguno da uno corto, no hay camino (se espera). Queda en self.rodeo_rechazado.
         t0 = time.perf_counter()
         resto = self.objetivos[self.i_objetivo:]
         k = next(k for k, o in enumerate(resto)
                  if o[0] in self.obligatorios or o[0] in self.sustitutos or o[0] == 'final')
+        antes = longitud_camino([(x, y)] + [(o[1], o[2]) for o in resto[:k + 1]])
         anclas = [o for o in resto[:k] if o[0] in self.anclas] + [resto[k]]
         despues = resto[k + 1:]
         obst = [(v[0], v[1]) for v in self.obstaculos.values()]
@@ -664,9 +783,14 @@ class Fase1Node(Node):
                     nuevos.append((f'replan{self.n_replan}_{m}', ix, iy, self.tol_waypoint))
                 nuevos.append((nombre, ox, oy, tol))
                 p = (ox, oy)
-            if nuevos is not None:
-                self.objetivos = self.objetivos[:self.i_objetivo] + nuevos + despues
-                return inflado, time.perf_counter() - t0
+            if nuevos is None:
+                continue
+            nuevo = longitud_camino([(x, y)] + [(o[1], o[2]) for o in nuevos])
+            if not largo and rodeo_largo(nuevo, antes, self.rodeo_ratio, self.rodeo_extra):
+                self.rodeo_rechazado = (nuevo, antes)
+                continue
+            self.objetivos = self.objetivos[:self.i_objetivo] + nuevos + despues
+            return inflado, time.perf_counter() - t0
         return None, time.perf_counter() - t0
 
     # ---------- Corrección continua con el mapa ----------
@@ -716,6 +840,20 @@ class Fase1Node(Node):
             return False
         return math.hypot(self.objetivos[i][1] - x, self.objetivos[i][2] - y) < self.reloc_bloqueo_dist
 
+    def reloc_reintentable(self, x, y):
+        # SIN_CAMINO cerca de la puerta (Door aún por delante, a menos de reloc_retry_dist) sin ninguna relocalización
+        # total: casi siempre la Y mala (06/11 14:36: RELOC_PARCIAL y SIN_CAMINO sin fin). Se relocaliza otra vez: si
+        # alguien tapaba el final de la canaleta y se ha apartado, ahora sale total.
+        if self.reloc_puerta_total or self.reloc_reintentos >= self.reloc_reintento_max:
+            return False
+        puerta = next((o for o in self.objetivos[self.i_objetivo:] if o[0] == self.reloc_antes_de), None)
+        return puerta is not None and math.hypot(puerta[1] - x, puerta[2] - y) < self.reloc_reintento_dist
+
+    def empezar_reloc(self, tipo):
+        self.reloc_tipo = tipo
+        self.reloc_scans_lista = []
+        self.estado = 'RELOC'
+
     def relocalizar(self, x, y, th):
         # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose con la pared de la puerta
         # (ajuste_puerta): total (x, y, rumbo), parcial (x y rumbo) o nada (se sigue con la odometría).
@@ -731,7 +869,12 @@ class Fase1Node(Node):
         # Mediana de los scans; cada lectura al mundo con la pose creída, y el ajuste a la pared de la puerta
         r = cp.mediana_de_scans(self.reloc_scans_lista)
         a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+        if self.reloc_tipo == 'Q':
+            self.relocalizar_q(r, a, x, y, th)
+            return
         dx, dy, dth, nivel, motivo, d = self.ajustar_puerta(r, a, x, y, th)
+        if nivel == 'total':
+            self.reloc_puerta_total = True
         medido = f"{d['n']} puntos" + (f", rms {d['rms'] * 100:.1f} cm" if d['rms'] is not None else '')
         aviso = ''
         if d['aviso_ancho']:
@@ -763,6 +906,40 @@ class Fase1Node(Node):
             self.get_logger().warn(f'Relocalización inconsistente al repetir: {texto}')
             self.escribir_log(nx, ny, nth, f'RELOC_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
         self.estado = 'GIRAR'
+
+    def relocalizar_q(self, r, a, x, y, th):
+        # Relocalización con la esquina de Q (ajuste_esquina): x, y y rumbo, o nada. Después el robot vuelve a ir a Q.
+        def texto_de(dx, dy, dth, d):
+            return (f"dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f} nx={d['nx']} ny={d['ny']}"
+                    + (f" dth_x={math.degrees(d['dth_x']):+.2f} dth_y={math.degrees(d['dth_y']):+.2f}"
+                       if d['dth_x'] is not None else ''))
+        dx, dy, dth, motivo, d = self.ajustar_esquina(r, a, x, y, th)
+        self.estado = 'GIRAR'
+        if motivo:
+            self.get_logger().warn(f'Relocalización en Q rechazada: {motivo} {texto_de(dx, dy, dth, d)}')
+            self.escribir_log(x, y, th, f'RELOC_Q_RECHAZADA {motivo} {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
+            return
+        nx, ny, nth = x + dx, y + dy, normalizar(th + dth)
+        self.get_logger().info(f'Relocalización en Q: {texto_de(dx, dy, dth, d)}')
+        self.escribir_log(nx, ny, nth, f'RELOC_Q {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
+        self.fijar_pose(nx, ny, nth)
+        self.obstaculos = {}
+        dx2, dy2, dth2, motivo2, d2 = self.ajustar_esquina(r, a, nx, ny, nth)
+        if (motivo2 or abs(dx2) > self.reloc_comprobar_dist or abs(dy2) > self.reloc_comprobar_dist
+                or abs(dth2) > self.reloc_comprobar_ang):
+            texto = f'{motivo2 or "ok"} {texto_de(dx2, dy2, dth2, d2)}'
+            self.get_logger().warn(f'Relocalización en Q inconsistente al repetir: {texto}')
+            self.escribir_log(nx, ny, nth, f'RELOC_Q_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
+
+    def ajustar_esquina(self, r, a, x, y, th):
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+        ok = ~np.isnan(r)
+        px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
+        py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
+        return ajuste_esquina(px, py, x, y, self.reloc_q_pared_x, self.reloc_q_pared_y, self.reloc_q_banda,
+                              self.reloc_q_alcance, self.reloc_q_max_rms, self.reloc_q_min_puntos, self.reloc_q_max_corr,
+                              self.reloc_q_max_ang, self.reloc_q_max_dif, self.reloc_q_eje_rumbo)
 
     def ajustar_puerta(self, r, a, x, y, th):
         # Lecturas (r, ángulos a) al mundo con la pose (x, y, th) y ajuste_puerta con los parámetros del yaml
@@ -818,8 +995,7 @@ class Fase1Node(Node):
                 self.reloc_adelantada = True
                 self.get_logger().warn(f'Bloqueo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}) junto a la puerta: relocalizo aquí')
                 self.escribir_log(x, y, th, 'RELOC_ADELANTADA', None, bloqueo[0], bloqueo[1])
-                self.reloc_scans_lista = []
-                self.estado = 'RELOC'
+                self.empezar_reloc('puerta')
             elif bloqueo is not None:
                 self.get_logger().warn(f'Ruta bloqueada por un obstáculo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}): espero')
                 self.estado = 'ESPERAR'
@@ -876,6 +1052,15 @@ class Fase1Node(Node):
         # LLEGADO: se comprueba antes que nada, esté girando o avanzando
         nombre, ox, oy, tol = self.objetivos[self.i_objetivo]
         dist = math.hypot(ox - x, oy - y)
+        es_q = nombre == self.reloc_q_en or self.sustitutos.get(nombre, ('',))[0] == self.reloc_q_en   # también Q~
+        if dist < tol and es_q and self.reloc_q_hechas < self.reloc_q_veces:
+            # En Q: relocalizar con la esquina antes de darlo por alcanzado; luego se vuelve a ir a Q con la pose nueva
+            self.reloc_q_hechas += 1
+            self.get_logger().info(f'Relocalizo en {nombre} ({self.reloc_q_hechas}/{self.reloc_q_veces}): '
+                                   f'junto {self.reloc_n} scans parado')
+            self.escribir_log(x, y, th, f'LLEGADA_RELOC_Q {self.reloc_q_hechas}', dist)
+            self.empezar_reloc('Q')
+            return 0.0, 0.0
         if dist < tol:
             self.get_logger().info(f'Waypoint {nombre} alcanzado (error {dist:.3f} m)')
             self.escribir_log(x, y, th, f'WAYPOINT {nombre}', dist)
@@ -888,8 +1073,7 @@ class Fase1Node(Node):
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
             # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno replanificado)
             if self.i_objetivo < len(self.objetivos) and self.objetivos[self.i_objetivo][0] == self.reloc_antes_de:
-                self.reloc_scans_lista = []
-                self.estado = 'RELOC'
+                self.empezar_reloc('puerta')
                 self.get_logger().info(f'Relocalizo en {nombre}: junto {self.reloc_n} scans parado')
             return 0.0, 0.0
 

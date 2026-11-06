@@ -57,6 +57,9 @@ fase1_node:
     block_hysteresis: 0.10       # m: para dar la ruta por LIBRE se pide esto de más (en distancia y en alcance)
     obstacle_wait_time: 3.0      # s parado antes de replanificar (por si es una persona que pasa)
     replan_retry_period: 5.0     # s entre reintentos si no hay camino
+    replan_max_ratio: 1.5        # un replan más largo que ratio * lo que quedaba + extra es un rodeo largo: no se toma
+    replan_max_extra: 1.0        # m   (06/11 15:10: 10.1 m por las mesas, hacia atrás, donde quedaban 5.2: otro robot)
+    replan_long_detour_after: 30.0   # s sin camino tras los que sí se acepta un rodeo largo
     mandatory_cover_radius: 0.40 # m: obligatorio tapado -> punto libre más cercano a él a menos de esto (OBLIGATORIO_TAPADO)
     mandatory_cover_wait: 5.0    # s sin camino antes de sustituir un obligatorio tapado
     mandatory_cover_exclude: ["Door"]   # nunca se sustituyen (la puerta bloqueada no se puede dar por pasada)
@@ -99,6 +102,24 @@ fase1_node:
     reloc_max_angle_deg: 3.0     # grados: corrección de rumbo máxima
     reloc_check_dist: 0.03       # m: al repetir el ajuste tras corregir, |dx| y |dy| deben quedar por debajo
     reloc_check_angle_deg: 0.5   # grados: ídem para el rumbo (si no, RELOC_INCONSISTENTE)
+    reloc_retry_dist: 1.0        # m: SIN_CAMINO a menos de esto de Door, sin RELOC total aún -> relocaliza otra vez (alguien
+                                 #   tapando el final de la canaleta: en cuanto se aparta, se corrige la Y y sigue)
+    reloc_retry_max: 10          # reintentos como máximo
+
+    # ---------- Relocalización en Q con la esquina (robot parado al llegar): x = reloc_q_wall_x delante, y = reloc_q_wall_y ----------
+    # Detrás de la puerta no hay corrección con el mapa (está mal en Y): sin esto, ~20 cm y ~8° de error en Q (06/11).
+    reloc_q_at: "Q"              # al llegar a este waypoint se relocaliza (reloc_q_times veces) antes de darlo por alcanzado
+    reloc_q_times: 2             # la 1.ª corrige; tras ir al punto otra vez, la 2.ª comprueba (y corrige lo que quede)
+    reloc_q_wall_x: 9.530        # m: valores del MAPA (Gazebo). En el robot real, los de la cinta (real.yaml)
+    reloc_q_wall_y: 13.780
+    reloc_q_heading_axis: "Y"    # rumbo solo de la pared y = reloc_q_wall_y (como pose_heading_axis): las dos difieren ~3°
+    reloc_q_band: 0.35           # m: puntos a menos de esto de cada recta con la pose creída
+    reloc_q_span: 1.0            # m: y a menos de esto del robot a lo largo de la pared
+    reloc_q_max_rms: 0.02        # m
+    reloc_q_min_points: 15       # por pared (en los bags del 06/11: 70-85)
+    reloc_q_max_corr: 0.40       # m: corrección máxima en X y en Y; más, no se corrige (RELOC_Q_RECHAZADA grande)
+    reloc_q_max_angle_deg: 12.0  # grados: rumbo máximo (06/11: -8.3/-8.6° en Q)
+    reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dos paredes (06/11: ~3°)
 
     # ---------- Corrección continua con el mapa de distancias (ajuste_mapa) ----------
     map_corr_mode: "apagado"     # "apagado", "sombra" (solo registra) o "activo". En el robot real lo fija real.yaml
@@ -149,8 +170,14 @@ fase1_node:
     #   lado lejano del hueco; no se usa para relocalizar.
     # mesa_pequena: la mesa pequeña del lado de los armarios, junto a E, entera (tablero visto desde arriba, hasta los
     #   armarios). Medida desde la cruz de E el 05/11: los dos tubos a 0.43 m de E hacia los armarios.
-    nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta", "mesa_pequena"]
-    nogo_x_min: [8.05, -0.55, 5.58, 5.51]
-    nogo_x_max: [8.72, 4.59, 6.34, 5.90]
-    nogo_y_min: [11.79, 15.85, 12.01, 5.57]
-    nogo_y_max: [12.95, 16.90, 12.06, 6.58]
+    # mesas_D_E, mesas_puerta (06/11): las filas de mesas de la sala, a la izquierda de la ruta. Borde del lado de la ruta
+    #   medido con cinta (NOTAS 06/11): X ~ 4.28 entre D y E y delante de E, X ~ 4.87 del escalón (Y 7.30) a la puerta,
+    #   hasta la pared derecha (Y 12.65). El otro extremo (X 1.50) no está medido: basta con que corte cualquier rodeo
+    #   por dentro de la sala. Sin ellas, con el pasillo de E a la puerta tapado (06/11 15:10, otro robot) el replan
+    #   rodeaba por las mesas, hacia atrás. El LiDAR solo ve las patas: salían como OBSTACULO en X 2.5-4.5, Y 3.7-8.7.
+    nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta", "mesa_pequena",
+                 "mesas_D_E", "mesas_puerta"]
+    nogo_x_min: [8.05, -0.55, 5.58, 5.51, 1.50, 1.50]
+    nogo_x_max: [8.72, 4.59, 6.34, 5.90, 4.28, 4.87]
+    nogo_y_min: [11.79, 15.85, 12.01, 5.57, 3.00, 7.30]
+    nogo_y_max: [12.95, 16.90, 12.06, 6.58, 7.30, 12.65]

@@ -46,8 +46,9 @@ ros2 run autonomous_nav fase1_node --ros-args \
   --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml \
   --params-file initial_pose_corregida.yaml
 ```
-- Recorrido: A → B → D → D-E_1 → **E** → E-Door_1 → E-Door_2 (para ~2 s y relocaliza) → **Door** → Door-Q_1 →
-  Door-Q_2 → **Q** → gira a θ = 0 → `FASE I COMPLETADA` → **Ctrl+C**. A 0.08 m/s, unos 4-5 min.
+- Recorrido (06/11): A → B → D → D-E_1 → **E** → E-Door_1 → E-Door_2 → E-Door_3 (para ~2 s y relocaliza con la
+  pared de la puerta) → **Door** → Door-Q_1 → Door-Q_2 → **Q** (para ~2 s, relocaliza con la esquina, se acerca ~20 cm
+  y repite: `RELOC_Q` dos veces) → gira a θ = 0 → `FASE I COMPLETADA` → **Ctrl+C**. A 0.12 m/s, unos 3.5-4 min.
 - Qué mirar y apuntar: los giros en D y en E; si va pegado a la pared derecha antes de la puerta (= error de
   rumbo: pararlo); qué dice la relocalización (`Relocalización: dx dy dth` / `parcial` / `rechazada` /
   `inconsistente`); si sale `OBLIGATORIO_TAPADO`.

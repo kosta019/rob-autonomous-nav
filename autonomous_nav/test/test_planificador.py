@@ -41,8 +41,9 @@ def ruta(datos):
 
 
 # E: 0.78 hasta el 05/11; con la zona mesa_pequena (la mesa entera, a 0.43 m de E hacia los armarios) es 0.43.
+# C 2.08 -> 0.49 y G 0.86 -> 0.62 desde el 06/11, con las zonas mesas_D_E y mesas_puerta.
 @pytest.mark.parametrize('nombre, esperada', [
-    ('A', 0.71), ('B', 1.13), ('C', 2.08), ('D', 0.58), ('E', 0.43), ('F', 0.68), ('G', 0.86),
+    ('A', 0.71), ('B', 1.13), ('C', 0.49), ('D', 0.58), ('E', 0.43), ('F', 0.68), ('G', 0.62),
     ('Door', 0.36), ('Q', 0.56), ('R', 0.73), ('S', 1.36), ('T', 0.55), ('Base', 0.15)])
 def test_holgura_1cm(datos, nombre, esperada):
     p, h1, meta1, h5, meta5, puntos = datos
@@ -88,10 +89,12 @@ def test_tramo_E_Door(ruta):
     assert lon == pytest.approx(6.13, abs=TOL_LONGITUD)
     # Referencias actualizadas el 05/11. Antes: un solo intermedio en (5.96, 11.66). Con hoja_puerta (la hoja
     # abierta hacia la sala, en el borde lejano) el de antes de la puerta se aleja 16-20 cm hacia el borde cercano;
-    # con mesa_pequena aparece otro al salir de E, bordeando la mesa.
-    assert len(puntos) == 4
-    assert math.dist(puntos[1], (5.115, 7.005)) < TOL_PUNTO
-    assert math.dist(puntos[2], (5.915, 11.455)) < TOL_PUNTO
+    # con mesa_pequena aparece otro al salir de E, bordeando la mesa. 06/11: con mesas_puerta (esquina en (4.87, 7.30))
+    # el de salida de E baja a (5.115, 6.805) y aparece otro en (5.715, 8.155), lejos de las mesas.
+    assert len(puntos) == 5
+    assert math.dist(puntos[1], (5.115, 6.805)) < TOL_PUNTO
+    assert math.dist(puntos[2], (5.715, 8.155)) < TOL_PUNTO
+    assert math.dist(puntos[3], (5.915, 11.455)) < TOL_PUNTO
 
 
 def test_tramo_Door_Q(ruta):
@@ -114,10 +117,11 @@ def test_total_y_holgura(ruta):
 
 
 def test_ruta_directa_para_comparar(datos):
-    # A -> E -> Door -> Q sin B ni D: cruza las mesas (aún no están en el mapa); solo sirve para comparar
+    # A -> E -> Door -> Q sin B ni D; solo sirve para comparar. 17.0 m hasta el 06/11 (cruzaba las mesas); con
+    # mesas_D_E y mesas_puerta tiene que rodearlas: 18.06 m
     p, h1, meta1, h5, meta5, puntos = datos
     directa = pf.planificar(p, h1, meta1, h5, meta5, secuencia(puntos, ['A', 'E', 'Door', 'Q']), 0.25)
-    assert sum(t[3] for t in directa) == pytest.approx(17.0, abs=TOL_LONGITUD)
+    assert sum(t[3] for t in directa) == pytest.approx(18.06, abs=TOL_LONGITUD)
 
 
 def test_tiempo_de_un_plan_completo(datos):

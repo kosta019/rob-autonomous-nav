@@ -157,3 +157,50 @@ es que Q (o el mapa detrás de la puerta) no coincida con la cruz, no deriva.
    puerta y replanes; `block_lookahead` mayor en rectas), probado en Gazebo, y rectas a 0.18 → 0.20 (0.22 es el
    máximo del motor: sin margen para corregir el rumbo).
 4. El obstáculo fijo en (7.55, 12.9).
+
+## Rutas 7-9 (0.12 m/s): relocalización en Q, mesas en el mapa y otros robots
+
+| Ruta | Hora | Resultado | Log | Bag |
+|---|---|---|---|---|
+| 7 | 14:53 | A → Q (3:16); **otra vez 20 cm, mismo ángulo** (cinta) | `mission_log_ruta_completa_012_b.csv` | `bag_fase1_20261106_145112` |
+| 8 | 15:08 | otros robots en la ruta: **rodeo hacia atrás por las mesas** tras E; Ctrl+C | `mission_log_ruta_robots_rodeo_mesas.csv` | `bag_fase1_20261106_150557` |
+| 9 | 15:17 | con otros robots: **A → Q, sobre la cruz** (`foto_Q_reloc_Q.jpg`) | `mission_log_ruta_reloc_Q.csv` | `bag_fase1_20261106_151702` |
+
+### Error en Q → relocalización con la esquina de Q
+
+- Cinta desde la cruz de Q: **0.60 m a la pared de delante (+X) y 0.50 m a la de la derecha (−Y)** → paredes en
+  X 9.570 e Y 13.997. El mapa dice 9.530 y 13.780 (mal en Y ~0.22 m, como el tramo del escalón a la puerta).
+- Con el mapa (`scripts_tarde/pose_mapa_Q.py`) la X coincidía con la cinta pero la Y no (~0.28 m): el mapa no sirve
+  detrás de la puerta. Con las dos paredes medidas (`scripts_tarde/esquina_Q.py`), en las rutas 4, 6 y 7:
+  real − creída ≈ (−0.13/−0.17, +0.09/+0.13), **rumbo −8.3/−8.6°** (la foto de la ruta 6 lo confirma: ~8° horario).
+  Las dos paredes difieren ~3° entre sí: el rumbo sale de la pared Y (como `pose_heading_axis` en A).
+- Nodo: al llegar a Q (o a su sustituto Q~) se para, `ajuste_esquina` con la mediana de 10 scans, corrige x, y y
+  rumbo, vuelve a ir a Q y repite (`reloc_q_times: 2`). Eventos `LLEGADA_RELOC_Q n`, `RELOC_Q`, `RELOC_Q_RECHAZADA`,
+  `RELOC_Q_INCONSISTENTE`. En fase1.yaml las paredes del mapa (Gazebo); en real.yaml las de la cinta.
+- **Ruta 9:** `RELOC_Q dx=-0.184 dy=+0.115 dth=-6.35` y la segunda `dx=-0.005 dy=+0.010 dth=+0.25`. Sobre la cruz.
+- **Sin explicar:** de dónde salen los 6-9° de rumbo entre la puerta (RELOC deja dth ~0) y Q. Mirar antes de subir
+  la velocidad.
+
+### Rodeo por las mesas (ruta 8) → mesas en el mapa y rodeos largos rechazados
+
+- 15:10:35, pasillo de E a la puerta tapado (otro robot) en (4.93, 7.37): el replan hasta Door daba **10.07 m por
+  dentro de la sala** (X mín 2.57) donde quedaban 5.20, y el robot volvió hacia D. Las mesas no estaban en el mapa:
+  sus patas salían como OBSTACULO en X 2.5-4.5, Y 3.7-8.7.
+- **Zonas prohibidas `mesas_D_E` (X 1.50-4.28, Y 3.00-7.30) y `mesas_puerta` (X 1.50-4.87, Y 7.30-12.65)** con los
+  bordes medidos con cinta (X 1.50 sin medir). Ruta regenerada: E-Door_1 (5.115, 6.805), nuevo E-Door_2
+  (5.715, 8.155); el de la relocalización en la puerta, (5.915, 11.455), ahora se llama E-Door_3. 18.61 m.
+- **Rodeo largo:** un replan más largo que 1.5 × lo que quedaba + 1 m no se toma hasta 30 s sin camino (se espera,
+  `RODEO_LARGO`). Con el bag (`scripts_tarde/rodeo_1510.py`): mapa viejo 10.07 m → RODEO_LARGO; mapa nuevo 5.19 m
+  por el pasillo.
+- **Reintento de la relocalización en la puerta:** SIN_CAMINO a < 1 m de Door sin RELOC total → `RELOC_REINTENTO`
+  (hasta 10). Sin probar en el robot (no ha hecho falta).
+- `reloc_max_dy` 0.55 → 0.65: dy de la tarde −0.442, −0.462, −0.471, −0.490, −0.446.
+- Ruta 9: bloqueos entre D y E rodeados en local (X ≥ 4.7), E tapado → E~ a 0.21 m, y el bloqueo de siempre tras
+  Door-Q_1 (7.55, 12.9), ~25 s. Corrección con el mapa: mediana 1.0 cm / 0.5 cm / 0.3°.
+
+## Pendiente (15:22)
+
+1. Rumbo: 6-9° de error acumulado entre la puerta y Q (ver arriba). Con los bags: /odom frente a las paredes en ese tramo.
+2. Velocidad: 0.15 global; después perfil por tramos (rectas a 0.18 → 0.20), probado en Gazebo.
+3. El bloqueo fijo tras Door-Q_1 en (7.55, 12.9): ¿qué hay ahí que no está en el mapa?
+4. Borde lejano de las mesas (X 1.50) sin medir; no afecta a la ruta.

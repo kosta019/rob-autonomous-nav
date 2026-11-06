@@ -6,7 +6,7 @@ fase1_node:
   ros__parameters:
     use_sim_time: false
     # 05/11: a 0.12 m/s el rumbo derivaba 3-5° en la ruta (crece en marcha y salta en los giros; parado, no).
-    #   A 0.08 m/s las A->B salieron con < 0.5°. Configuración candidata para la demo.
+    #   A 0.08 m/s las A->B salieron con < 0.5°. 06/11: con la corrección con el mapa activa, 0.12 va bien (A -> Q, 3:36).
     max_linear_speed: 0.12
     max_angular_speed: 0.4       # 0.8 en fase1.yaml. k_angular (1.5) no cambia: solo satura los giros de más de ~15°
     tol_mandatory: 0.02          # con 0.03 se paraba ~2.7 cm antes de B. Si da vueltas cerca de un punto, volver a 0.03
@@ -31,4 +31,9 @@ fase1_node:
     # Corrección con el mapa (06/11): empezar en "sombra"; pasar a "activo" cuando se haya comprobado con una ruta A->E.
     map_corr_mode: "activo"
     # 05/11: la Y creída llega a la puerta con hasta ~0.42 m de más (rutas 3 y 5): 0.45 quedaba justo.
-    reloc_max_dy: 0.55
+    # 06/11 tarde: dy -0.442, -0.462, -0.471, -0.490 (crece con la velocidad): 0.55 queda justo otra vez.
+    reloc_max_dy: 0.65
+    # Esquina de Q medida con cinta (06/11) desde la cruz de Q (8.970, 14.497): 0.60 m a la pared de delante (+X) y 0.50 m
+    # a la de la derecha (-Y). El mapa dice 9.530 y 13.780: mal en Y (~0.22 m). El LiDAR desde Q ve 0.608 y ~0.49.
+    reloc_q_wall_x: 9.570
+    reloc_q_wall_y: 13.997
