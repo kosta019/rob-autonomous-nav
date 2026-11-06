@@ -1,4 +1,4 @@
-# GENERADO por scripts/planificar_fase1.py el 2026-11-06 15:14.
+# GENERADO por scripts/planificar_fase1.py el 2026-11-06 16:25.
 # Holgura estática (m) de cada celda: el mínimo de sus píxeles de 1 cm, con las zonas prohibidas.
 # Celda (i, j): i con X, j con Y. X del borde superior de la celda i = origen_x + i * resolucion.
 resolucion: 0.05

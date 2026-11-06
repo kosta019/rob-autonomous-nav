@@ -140,7 +140,9 @@ Hay **dos**: la buena es la del enunciado (cuadrada, 4 pilares); la otra, triang
 - El LiDAR (a ~18 cm) ve solo las patas: los listones empiezan a 25 cm. El Burger (~19 cm de alto, 17.8 de ancho) cabe
   debajo, con ~10.6 cm por lado entre patas (39 cm de hueco): la fase III es entrar y parar sobre la cruz.
 - `range_max` del /scan: 3.5 m. Con ~1° entre rayos, una pata da 2-3 puntos a ≤ 1.2 m; a 2.2 m (desde Q), 0-1.
-- Suelo irregular del pasillo: sigue **estimado**; deja P Base a 0.15 m (inalcanzable con inflado 0.25). Medir.
+- Suelo irregular del pasillo (06/11): rectángulo de **cinta negra** en el suelo junto a la pared del fondo del pasillo.
+  Medido: borde a 0.82 m de la cruz de P Base (Y 16.52), 4.85 m de largo (supuesto desde X −0.55: hasta X 4.30).
+  P Base queda con 0.83 m de holgura. Fotos en `test_real/datos_20261106/foto_suelo_irregular_*.jpg`.
 
 ## Decisiones de diseño ya tomadas (no las reabras sin un motivo nuevo)
 

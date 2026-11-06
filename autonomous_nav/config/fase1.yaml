@@ -165,6 +165,9 @@ fase1_node:
     point_y:     [0.920, 1.722, 2.517, 2.517, 6.122, 8.528, 10.930, 11.682, 14.497, 16.170, 14.497, 15.300, 15.700]
 
     # Zonas prohibidas que no están en el mapa (rectángulos en coordenadas del mundo)
+    # suelo_irregular_pasillo (06/11, cinta negra en el suelo junto a la pared del fondo del pasillo): MEDIDO 0.82 m desde la
+    #   cruz de P Base hasta el borde, perpendicular a la pared (Y 15.70 + 0.82 = 16.52), 4.85 m de largo; SUPUESTO que empieza
+    #   en la pared del extremo (X -0.55 -> 4.30). Antes estimada Y 15.85 (P Base a 0.15 m, inalcanzable).
     # ESTIMADAS desde la figura del enunciado: hay que medirlas en el laboratorio.
     # TODO: añadir las mesas entre B y C (zona 1) cuando estén medidas.
     # hoja_puerta: la hoja abierta del todo hacia la sala, perpendicular al hueco, con las bisagras en el borde lejano
@@ -180,6 +183,6 @@ fase1_node:
     nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta", "mesa_pequena",
                  "mesas_D_E", "mesas_puerta"]
     nogo_x_min: [8.05, -0.55, 5.58, 5.51, 1.50, 1.50]
-    nogo_x_max: [8.72, 4.59, 6.34, 5.90, 4.28, 4.87]
-    nogo_y_min: [11.79, 15.85, 12.01, 5.57, 3.00, 7.30]
+    nogo_x_max: [8.72, 4.30, 6.34, 5.90, 4.28, 4.87]
+    nogo_y_min: [11.79, 16.52, 12.01, 5.57, 3.00, 7.30]
     nogo_y_max: [12.95, 16.90, 12.06, 6.58, 7.30, 12.65]

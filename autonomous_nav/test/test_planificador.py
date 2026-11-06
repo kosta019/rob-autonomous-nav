@@ -41,10 +41,11 @@ def ruta(datos):
 
 
 # E: 0.78 hasta el 05/11; con la zona mesa_pequena (la mesa entera, a 0.43 m de E hacia los armarios) es 0.43.
-# C 2.08 -> 0.49 y G 0.86 -> 0.62 desde el 06/11, con las zonas mesas_D_E y mesas_puerta.
+# C 2.08 -> 0.49 y G 0.86 -> 0.62 desde el 06/11, con las zonas mesas_D_E y mesas_puerta. S 1.36 -> 1.50, T 0.55 -> 1.22
+# y Base 0.15 -> 0.83 con suelo_irregular_pasillo medido (Y desde 16.52).
 @pytest.mark.parametrize('nombre, esperada', [
     ('A', 0.71), ('B', 1.13), ('C', 0.49), ('D', 0.58), ('E', 0.43), ('F', 0.68), ('G', 0.62),
-    ('Door', 0.36), ('Q', 0.56), ('R', 0.73), ('S', 1.36), ('T', 0.55), ('Base', 0.15)])
+    ('Door', 0.36), ('Q', 0.56), ('R', 0.73), ('S', 1.50), ('T', 1.22), ('Base', 0.83)])
 def test_holgura_1cm(datos, nombre, esperada):
     p, h1, meta1, h5, meta5, puntos = datos
     # La referencia está redondeada a 2 decimales
