@@ -258,6 +258,7 @@ class Fase1Node(Node):
         # Relocalización con la pared de la puerta, en el último waypoint antes de reloc_before (robot parado)
         self.reloc_antes_de = self.declare_parameter('reloc_before', Parameter.Type.STRING).value
         self.reloc_n = self.declare_parameter('reloc_scans', Parameter.Type.INTEGER).value
+        self.reloc_bloqueo_dist = self.declare_parameter('reloc_on_block_dist', D).value
         self.reloc_pared_x = self.declare_parameter('reloc_wall_x', D).value
         self.reloc_borde_y = self.declare_parameter('reloc_edge_y', D).value
         self.reloc_ancho = self.declare_parameter('reloc_door_width', D).value
@@ -391,6 +392,7 @@ class Fase1Node(Node):
         self.t_sin_camino = None    # desde cuándo no hay camino (para el obligatorio tapado)
         self.sustitutos = {}        # nombre del sustituto -> (obligatorio, x, y)
         self.reloc_ultimo_scan = None
+        self.reloc_adelantada = False   # ya se ha relocalizado por un bloqueo antes del waypoint (solo una vez)
 
         # 4. Publicador y suscriptores (QoS como en la plantilla)
         qos_profile_b = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=10)
@@ -702,6 +704,15 @@ class Fase1Node(Node):
 
     # ---------- Relocalización con las paredes ----------
 
+    def reloc_adelantable(self, x, y):
+        # Bloqueo yendo al último waypoint antes de reloc_before (Door), a menos de reloc_on_block_dist de él: casi
+        # siempre es el marco de la puerta, visto dentro del hueco porque la Y llega mal (06/11: +0.37 m). Se relocaliza
+        # ahí mismo, una vez, en vez de esperar: la relocalización borra los obstáculos, calculados con la Y mala.
+        i = self.i_objetivo
+        if self.reloc_adelantada or i + 1 >= len(self.objetivos) or self.objetivos[i + 1][0] != self.reloc_antes_de:
+            return False
+        return math.hypot(self.objetivos[i][1] - x, self.objetivos[i][2] - y) < self.reloc_bloqueo_dist
+
     def relocalizar(self, x, y, th):
         # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose con la pared de la puerta
         # (ajuste_puerta): total (x, y, rumbo), parcial (x y rumbo) o nada (se sigue con la odometría).
@@ -800,7 +811,13 @@ class Fase1Node(Node):
         self.actualizar_obstaculos(x, y, th, ahora_s)
         if self.estado in ('GIRAR', 'AVANZAR'):
             bloqueo = self.ruta_bloqueada(x, y)
-            if bloqueo is not None:
+            if bloqueo is not None and self.reloc_adelantable(x, y):
+                self.reloc_adelantada = True
+                self.get_logger().warn(f'Bloqueo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}) junto a la puerta: relocalizo aquí')
+                self.escribir_log(x, y, th, 'RELOC_ADELANTADA', None, bloqueo[0], bloqueo[1])
+                self.reloc_scans_lista = []
+                self.estado = 'RELOC'
+            elif bloqueo is not None:
                 self.get_logger().warn(f'Ruta bloqueada por un obstáculo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}): espero')
                 self.estado = 'ESPERAR'
                 self.t_espera = ahora_s

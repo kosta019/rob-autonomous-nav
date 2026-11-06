@@ -73,6 +73,8 @@ fase1_node:
     # ---------- Relocalización con la pared de la puerta (robot parado): rumbo y X de la recta, Y del lateral del marco ----------
     reloc_before: "Door"         # se relocaliza al llegar al último waypoint antes de este (sea cual sea su nombre)
     reloc_scans: 10              # scans que se juntan (mediana): a 5 Hz, unos 2 s parado
+    reloc_on_block_dist: 0.50    # m: bloqueo a menos de esto de ese waypoint -> relocaliza ahí (una vez). 06/11: con la Y
+                                 #   +0.37 m el marco salía en el hueco y bloqueaba 0.21 m antes; desde allí: total, dy -0.37
     # CALIBRACIÓN (05/11, robot en (5.96, 11.66, 90°) medido con cinta: 0.37 m a la canaleta, 0.43 m al yeso):
     reloc_wall_x: 6.344          # m: X a la que el LiDAR ve la pared de la puerta (la canaleta; el yeso está en ~6.39).
                                  #   Calibrada: 6.343-6.344 en 3 medidas (puntos girados para que la pared vaya en Y)

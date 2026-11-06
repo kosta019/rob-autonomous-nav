@@ -39,3 +39,33 @@ def test_sigue_mirando_tras_un_waypoint_intermedio():
     # Pasado un waypoint que no es obligatorio, se sigue mirando hasta completar block_lookahead
     n = nodo_falso([('replan1_1', 4.982, 5.780, 0.07), ('E', 5.082, 6.122, 0.02)], (5.10, 5.95))
     assert Fase1Node.ruta_bloqueada(n, *ROBOT) is not None
+
+
+# reloc_adelantable: un bloqueo justo antes del waypoint de relocalización (06/11 13:44: el marco de la puerta visto en
+# el hueco con la Y +0.37 m, a 0.21 m de ese waypoint) relocaliza ahí en vez de esperar.
+ANTES_PUERTA = (5.937, 11.241)
+
+
+def nodo_reloc(objetivos, hecha=False):
+    return SimpleNamespace(objetivos=objetivos, i_objetivo=0, reloc_antes_de='Door', reloc_bloqueo_dist=0.50,
+                           reloc_adelantada=hecha)
+
+
+def test_bloqueo_junto_a_la_puerta_relocaliza():
+    n = nodo_reloc([('replan6_3', 5.87, 11.41, 0.07), ('Door', 6.49, 11.682, 0.02)])
+    assert Fase1Node.reloc_adelantable(n, *ANTES_PUERTA)
+
+
+def test_solo_una_vez():
+    n = nodo_reloc([('replan6_3', 5.87, 11.41, 0.07), ('Door', 6.49, 11.682, 0.02)], hecha=True)
+    assert not Fase1Node.reloc_adelantable(n, *ANTES_PUERTA)
+
+
+def test_lejos_del_waypoint_no():
+    n = nodo_reloc([('E-Door_2', 5.915, 11.455, 0.07), ('Door', 6.49, 11.682, 0.02)])
+    assert not Fase1Node.reloc_adelantable(n, 5.70, 10.60)
+
+
+def test_si_el_siguiente_no_es_la_puerta_no():
+    n = nodo_reloc([('E-Door_1', 5.115, 7.005, 0.07), ('E-Door_2', 5.915, 11.455, 0.07)])
+    assert not Fase1Node.reloc_adelantable(n, 5.10, 6.90)
