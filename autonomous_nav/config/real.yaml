@@ -29,6 +29,6 @@ fase1_node:
     # el rumbo solo de la pared izquierda (pose_heading_axis "Y" en fase1.yaml).
     lidar_yaw_offset: 0.0
     # Corrección con el mapa (06/11): empezar en "sombra"; pasar a "activo" cuando se haya comprobado con una ruta A->E.
-    map_corr_mode: "sombra"
+    map_corr_mode: "activo"
     # 05/11: la Y creída llega a la puerta con hasta ~0.42 m de más (rutas 3 y 5): 0.45 quedaba justo.
     reloc_max_dy: 0.55
