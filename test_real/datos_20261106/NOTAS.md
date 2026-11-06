@@ -229,3 +229,17 @@ No es un objeto ni un reflejo: el LiDAR ve el marco/la esquina de la pared a la 
 y de intensidad alta), y la ruta pasa a ~0.96 m de esa esquina: la pose ya va mal en ese tramo. Las paredes del vestíbulo
 y del pasillo no son paralelas a las de la sala (0-10° según dónde, con el LiDAR), y con el error de pose no se separan.
 La RELOC_Q lo corrige al final. Pendiente con la fase II (habrá que localizarse en el pasillo igualmente).
+
+## Ruta 11 (15:48): la del vídeo, 0.20 m/s, batería cargada (12.33 V)
+
+`mission_log_ruta_video.csv`, `bag_fase1_20261106_154739`. **A → Q en 2:49, `FASE I COMPLETADA`, pose final a 1.9 cm.**
+E a 1 cm; `RELOC_ADELANTADA` dy −0.407 Y=canaleta y la segunda 3 cm; sin bloqueo tras Door-Q_1; `RELOC_Q` −0.258,
++0.150, −3.6° y la segunda ~1 cm. En el bag, /scan /odom /imu /cmd_vel con un solo publicador (había un `gz sim` con
+el mundo vacío abierto en el PC, dominio 11, sin bridge: no interfirió). Había un /map con publicador y /tf con 2: un
+SLAM de alguien en el dominio 11 (fase1_node no los usa).
+
+- **Q dado por tapado (`OBLIGATORIO_TAPADO Q 0.073`)**: tras la primera RELOC_Q, la pared de la derecha de Q se ve donde
+  está (Y ≈ 14.00, puntos en X 8.64-9.28) y el mapa la tiene en 13.78: esa franja sale como obstáculo nuevo a 0.5 m de Q,
+  BLOQUEO, SIN_CAMINO, a los 5 s Q~. El final, bien (1.9 cm), pero el log da 7.3 cm en Q. **Arreglo propuesto: zona
+  prohibida X 8.60-9.53, Y 13.78-14.00 (la pared donde la mide la cinta) y regenerar la ruta.** En las rutas 9 y 10 no
+  pasó por suerte.
