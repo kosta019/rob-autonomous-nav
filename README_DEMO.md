@@ -93,6 +93,17 @@ ros2 run autonomous_nav fase1_node --ros-args \
 Se queda ~1 s parado mirando alrededor (`PLAN_SALIDA ... obstaculos=N`) y sale esquivando los paneles. Si sale
 `SALIDA_SIN_CAMINO`: los huecos entre paneles son de menos de ~0.6 m; espera y reintenta solo cada 5 s.
 
+### Pose final (la da el profesor; por defecto, Q)
+
+Añadir al final del comando de `fase1_node` (θ en radianes; 0 = mirando a +X):
+```bash
+  -p final_pose:="[X, Y, THETA]"
+```
+Por ejemplo `-p final_pose:="[7.5, 12.6, 1.5708]"`. Si queda a más de 0.30 m de Q, al pasar Q planifica hasta ella
+esquivando paredes y obstáculos (`PLAN_FINAL`; si no hay camino, `FINAL_SIN_CAMINO` y reintenta). Desde Q, el error
+crece con la distancia (sin corrección después de Q): unos cm a 1-2 m, hasta ~15-20 cm a 10 m.
+**Sin probar en el robot** (06/11): probarlo una vez antes de la demo con una pose final distinta de Q.
+
 ### 3.3 Qué debe pasar (y qué no)
 
 Recorrido: (A →) B → D → E → (pasillo) → para ~2 s junto a la puerta y **relocaliza** → **Door** → **Q** (para, relocaliza

@@ -112,10 +112,11 @@ def nodo_q():
         estado='AVANZAR', i_objetivo=0, objetivos=[('Q', 8.970, 14.497, 0.02), ('final', 8.970, 14.497, 0.02)],
         reloc_q_en='Q', reloc_q_veces=2, reloc_q_hechas=0, reloc_n=10, reloc_antes_de='Door', sustitutos={},
         pose_final=[8.970, 14.497, 0.0], tol_final_yaw=0.03, k_angular=1.5, max_w=0.4, k_lineal=0.5, max_v=0.12,
-        angulo_girar=0.17, angulo_reorientar=0.52, eventos=[])
+        angulo_girar=0.17, angulo_reorientar=0.52, plan_final_dist=0.30, eventos=[])
     n.get_logger = lambda: SimpleNamespace(info=lambda *a: None, warn=lambda *a: None)
     n.escribir_log = lambda x, y, th, ev, *a: n.eventos.append(ev)
     n.empezar_reloc = lambda tipo: Fase1Node.empezar_reloc(n, tipo)
+    n.planificar_final = lambda x, y, th: None
     return n
 
 
@@ -183,3 +184,22 @@ def test_salida_desde_b_c_o_d_quita_lo_que_queda_atras():
     assert [o[0] for o in quitar_hasta(obj, 'B')] == ['D', 'D-E_1', 'E', 'Door', 'Q', 'final']
     assert [o[0] for o in quitar_hasta(obj, 'D')] == ['D-E_1', 'E', 'Door', 'Q', 'final']
     assert quitar_hasta(obj, '') == obj
+
+
+def test_pose_final_lejos_de_q_se_planifica():
+    n = nodo_q()
+    n.reloc_q_hechas = 2
+    n.objetivos = [('Q', 8.970, 14.497, 0.02), ('final', 7.0, 15.5, 0.02)]
+    llamado = []
+    n.planificar_final = lambda x, y, th: llamado.append((x, y))
+    Fase1Node.maquina_estados(n, 8.965, 14.497, 0.0)
+    assert n.i_objetivo == 1 and llamado
+
+
+def test_pose_final_en_q_no_planifica():
+    n = nodo_q()
+    n.reloc_q_hechas = 2
+    llamado = []
+    n.planificar_final = lambda x, y, th: llamado.append((x, y))
+    Fase1Node.maquina_estados(n, 8.965, 14.497, 0.0)
+    assert n.i_objetivo == 1 and not llamado

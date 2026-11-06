@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **94 passed, 1 xfailed**.
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **96 passed, 1 xfailed**.
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -68,8 +68,10 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
    closure, alcance 3.5 m) y volver a grabarlo en el laboratorio.
 4. **Integrar la fase II en el nodo**: `current_phase` = II en el log (ahora siempre "I"), fases I y II en un solo
    lanzamiento (ahora dos con Ctrl+C entre medias), ruta de cobertura tras Q, vuelta a P Base, guardar el mapa.
-5. **Pose final asignada por el profesor**: hoy `final_pose` = Q. Si es otra, después de Q hay que **planificar** hasta
-   ella (ahora va en línea recta desde Q, y podría cruzar una pared). Documentarlo en README_DEMO.
+5. **Pose final asignada por el profesor**: HECHO en código (06/11, al final): si `final_pose` queda a más de
+   `final_plan_dist` (0.30 m) de Q, al pasar Q se planifica hasta ella (`PLAN_FINAL` / `FINAL_SIN_CAMINO`); antes iba en
+   línea recta (al vestíbulo, p. ej. (7.5, 12.6), cruzaba una pared). En README_DEMO ("Pose final"). **Sin probar en el
+   robot.** Sin corrección después de Q: el error crece con la distancia (lo arregla la localización por SLAM).
 6. **Fase III**: de P Base a delante de la estación, alinearse con las patas en directo, entrar entre las dos de delante
    y parar sobre la cruz (con la pose relativa a los pilares, no la odometría). Desarrollar con
    `bag_fase1_20261106_171005`.

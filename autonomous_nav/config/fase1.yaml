@@ -9,7 +9,7 @@ fase1_node:
 
     # ---------- Poses (las asigna el profesor en la demo) ----------
     initial_pose: [0.700, 0.920, 0.0]      # [x, y, theta(rad)]. PROVISIONAL: punto A mirando a +X
-    final_pose:   [8.970, 14.497, 0.0]     # [x, y, theta(rad)]. PROVISIONAL: Q. La pose real está en la zona 2
+    final_pose:   [8.970, 14.497, 0.0]     # [x, y, theta(rad)]. PROVISIONAL: Q. La da el profesor (zona 2): -p final_pose:=...
 
     # ---------- Ruta (salida desde A) ----------
     # Calculada con el Distance Transform con costes sobre maps/mapa_1cm.png (inflado 0.25 m).
@@ -34,6 +34,7 @@ fase1_node:
     plan_at_start: false         # true: parado, junta start_scans scans (obstáculos) y planifica desde la pose inicial.
                                  #   Para B, C y D (paneles de madera movibles por la zona de salida). Desde A no hace falta
     start_scans: 6               # a 5 Hz, ~1.2 s
+    final_plan_dist: 0.30        # m: si la pose final queda más lejos del último obligatorio (Q), se planifica hasta ella
     k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
     turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar
     reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, volver a GIRAR

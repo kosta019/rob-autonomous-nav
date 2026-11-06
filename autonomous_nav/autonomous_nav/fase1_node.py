@@ -487,6 +487,7 @@ class Fase1Node(Node):
         despues_de = self.declare_parameter('start_after', Parameter.Type.STRING).value
         self.planificar_al_salir = self.declare_parameter('plan_at_start', Parameter.Type.BOOL).value
         self.scans_salida = self.declare_parameter('start_scans', Parameter.Type.INTEGER).value
+        self.plan_final_dist = self.declare_parameter('final_plan_dist', D).value
         self.objetivos = quitar_hasta(self.objetivos, despues_de)
         if self.planificar_al_salir:
             self.estado = 'INICIO'
@@ -776,6 +777,19 @@ class Fase1Node(Node):
         self.escribir_log(x, y, th, f'REPLANIFICACION inflado={inflado:.2f}', segundos)
         self.t_sin_camino = None
         self.estado = 'GIRAR'
+
+    def planificar_final(self, x, y, th):
+        inflado, segundos = self.replanificar(x, y)
+        if inflado is None:
+            ahora = self.get_clock().now().nanoseconds * 1e-9
+            self.get_logger().warn('Sin camino a la pose final: espero y reintento')
+            self.escribir_log(x, y, th, 'FINAL_SIN_CAMINO', segundos)
+            self.estado = 'ESPERAR'
+            self.t_espera = ahora
+            self.t_sin_camino = ahora
+            return
+        self.get_logger().info(f'Plan a la pose final con inflado {inflado:.2f}')
+        self.escribir_log(x, y, th, f'PLAN_FINAL inflado={inflado:.2f}', segundos)
 
     def inicio(self, x, y, th, ahora):
         # Estado INICIO (robot parado): start_scans scans nuevos llenan la memoria de obstáculos (actualizar_obstaculos ya
@@ -1144,6 +1158,11 @@ class Fase1Node(Node):
                 self.escribir_log(x, y, th, f'OBLIGATORIO_TAPADO {real} {d_real:.3f}', d_real)
             self.i_objetivo += 1
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
+            # Pose final asignada por el profesor (06/11: puede no ser Q). Si queda lejos del último obligatorio, se
+            # planifica hasta ella (antes, línea recta: podía cruzar una pared). Sin camino: ESPERAR, que reintenta.
+            sig = self.objetivos[self.i_objetivo] if self.i_objetivo < len(self.objetivos) else None
+            if sig is not None and sig[0] == 'final' and math.hypot(sig[1] - x, sig[2] - y) > self.plan_final_dist:
+                self.planificar_final(x, y, th)
             # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno replanificado)
             if self.i_objetivo < len(self.objetivos) and self.objetivos[self.i_objetivo][0] == self.reloc_antes_de:
                 self.empezar_reloc('puerta')
