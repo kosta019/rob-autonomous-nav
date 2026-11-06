@@ -151,8 +151,11 @@ Hay **dos**: la buena es la del enunciado (cuadrada, 4 pilares); la otra, triang
   la pone en (7.19, 16.48): coincide a ~3 cm. La odometría de Q a R, bien (~3 cm).
 - **Pared del extintor (larga, Y alto del pasillo): Y ≈ 17.15** (mapa 16.90). Pared del fondo (delante de Q): X 9.57.
 - R está **paralela a las paredes** y centrada en su cruz; T, centrada en su cruz, girada (sin medir).
-- T y P Base, sin medir: probablemente también desplazadas. La referencia en el pasillo es Q (relocalizada con su
-  esquina) + lo que ve el robot (pilares, SLAM), no las coordenadas del enunciado.
+- **P Base sí coincide**: a la pared del extintor 1.45 m (Y 15.70; enunciado 15.70) y a la pared del fondo 6.20 m
+  (X 3.37; enunciado 3.34). No es todo el pasillo: es **la cruz de R** la que está desplazada. T sin medir.
+  Los 15-20 cm de error al llegar a P Base (ensayo de las 16:37) son, entonces, de la pose: hace falta localizarse en el
+  pasillo (SLAM). El detector no debe fiarse de las cruces (las estaciones se pueden mover).
+- Suelo irregular: de Y 16.52 (0.82 m de P Base) a la pared del extintor (17.15): 0.63 m de ancho.
 
 ## Decisiones de diseño ya tomadas (no las reabras sin un motivo nuevo)
 
