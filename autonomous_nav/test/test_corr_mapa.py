@@ -108,6 +108,16 @@ def test_sin_marco_la_y_sale_de_la_canaleta():
     assert dy == pytest.approx(-0.33, abs=0.02)
 
 
+def test_escalon_de_un_solo_punto():
+    # 06/11 14:36: el primer rayo del escalón (0.7 cm detrás) entra en la recta y solo queda uno (+2.7 cm) detrás
+    px, py = puntos_canaleta(0.45, escalon=False)
+    px, py = np.r_[px, 6.351, 6.371], np.r_[py, 11.17 + 0.45, 11.21 + 0.45]
+    dx, dy, dth, nivel, motivo, _ = ajuste_puerta(px, py, 5.9, 11.2, y_fin_canaleta=11.14,
+                                                  **{**PUERTA, 'max_dy': 0.55})
+    assert (nivel, motivo) == ('total', 'canaleta')
+    assert dy == pytest.approx(-0.48, abs=0.03)
+
+
 def test_sin_escalon_no_se_fia_del_final():
     px, py = puntos_canaleta(0.33, escalon=False)
     assert ajuste_puerta(px, py, 5.9, 11.2, y_fin_canaleta=11.14, **PUERTA)[3:5] == ('parcial', 'sin_borde')

@@ -162,9 +162,12 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
     if y1 is None:
         # Sin marco: el final de la canaleta. Creíble solo si justo después hay un escalón hacia atrás (el yeso); algo
         # apoyado en la pared cortaría el tramo, pero quedaría por delante de la recta, no por detrás.
+        # Basta 1 punto (06/11 14:36): de lado, el escalón da 2-3 rayos y el primero (< 2 cm por detrás) entra en la
+        # recta; con >= 2 quedó 1 y no se corrigió la Y (+0.45 m: SIN_CAMINO en la puerta). Detrás de la recta solo
+        # puede estar la pared, y el scan ya es la mediana de reloc_scans.
         escalon = ((qx > datos['x_linea'] + 0.02) & (qx < datos['x_linea'] + 0.20)
                    & (qy > yfin) & (qy < yfin + 0.20))
-        if y_fin_canaleta is not None and np.sum(escalon) >= 2 and abs(y_fin_canaleta - yfin) <= max_dy:
+        if y_fin_canaleta is not None and np.sum(escalon) >= 1 and abs(y_fin_canaleta - yfin) <= max_dy:
             return dx, y_fin_canaleta - yfin, dth, 'total', 'canaleta', datos
         return dx, 0.0, dth, 'parcial', 'sin_borde', datos
     datos['y1'] = y1

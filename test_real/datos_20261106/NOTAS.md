@@ -109,3 +109,51 @@ MCAP=`bags/fase1_20261106_131026/fase1_20261106_131026_0.mcap`.
 - `reloc_bloqueo.py MCAP`: `ajuste_puerta` desde donde se bloqueó la ruta 2.
 - `salto_odom.py MCAP`: /odom, /scan e /imu alrededor del fallo de la OpenCR (ruta 3).
 - `../corr_mapa_log.py LOG`: resumen de las correcciones con el mapa.
+
+## Tarde (otro PC, batería nueva): primeras rutas completas A → Q
+
+Batería cambiada y robot reiniciado; /odom e /imu a 20 Hz, /scan a 5 Hz, 12.06 V. `comprobar_pose` sin avisos en
+todas: (0.682, 0.919, 0.16°) y (0.681, 0.919, 0.68°). E libre salvo donde se dice.
+
+| Ruta | Hora | Velocidad | Resultado | Log | Bag |
+|---|---|---|---|---|---|
+| 4 | 14:25 | 0.08 | **A → Q en 4:39**, `FASE I COMPLETADA` | `mission_log_ruta_completa_008.csv` | `bag_fase1_20261106_142217` |
+| 5 | 14:34 | 0.12 | obstáculo en E esquivado; **SIN_CAMINO en la puerta** (`RELOC_PARCIAL sin_borde`) | `mission_log_ruta_012_sin_borde.csv` | `bag_fase1_20261106_143325` |
+| 6 | 14:42 | 0.12 | **A → Q en 3:36** con el arreglo del escalón | `mission_log_ruta_completa_012.csv` | `bag_fase1_20261106_144143` |
+
+(La ruta 5 usó la pose de `comprobar_pose` de las 14:24, sin repetirla.)
+
+- **Relocalización adelantada: funciona.** Ruta 4: `RELOC dy=-0.442 Y=canaleta`; ruta 6: `dy=-0.462 Y=canaleta`. La
+  segunda RELOC en E-Door_2 queda en ~3 cm (dx +0.019, dy +0.031/+0.036) en las dos.
+- **Ruta 5, `sin_borde`:** el respaldo de la canaleta pedía ≥ 2 puntos del escalón de yeso detrás de la recta. De lado,
+  el escalón da 2-3 rayos y el primero (0.7 cm detrás) entra en la recta: en la ruta 4 quedaron 2 (+3.1, +3.3 cm), en
+  la 5 solo 1 (+2.7 cm). Sin dy, la Y siguió +0.47 m mal y SIN_CAMINO sin fin (como la ruta 2). **Arreglo: basta 1
+  punto** (detrás de la recta solo puede estar la pared; el scan es la mediana de 10). Con los bags: ruta 4 igual
+  (dy −0.442), ruta 5 `total canaleta` dy −0.471. Test `test_escalon_de_un_solo_punto` (falla con el código anterior).
+  Comprobado en el robot en la ruta 6.
+- Corrección con el mapa a 0.12 (ruta 6): 113 correcciones, mediana |dx| 0.9 cm, |dy| 0.7 cm, |dth| 0.3°. Tras B,
+  tres seguidas de dx ≈ −0.07 (la X llega 7 cm por delante tras el giro de B: a más velocidad crecerá).
+- Obstáculos: junto a D-E_1/E bloqueo + replan, llega a E a 2 cm (rutas 5 y 6). Tras Door-Q_1, en (7.55, 12.9), bloqueo
+  y replan en las dos rutas completas, ~25 s: algo fijo que no está en el mapa (sin mirar).
+- `TIMEOUT_SENSOR` momentáneo en la ruta 4 (14:26:06, entre B y D), recuperado en el mismo segundo; en el bag ningún
+  hueco > 0.47 s (umbral 0.5). Vigilar.
+- `real.yaml`: `max_linear_speed` 0.12.
+
+### Error en Q (~20 cm, sistemático)
+
+Ruta 6, cinta + `foto_Q_ruta_012.jpg` (robot mirando a +X): del eje de las ruedas a la cruz **20 cm**, la cruz delante a
+la derecha → real ≈ **15-17 cm por detrás en X y 8-10 cm hacia +Y** de Q, ligeramente girado. El robot cree estar en Q a
+2 cm. Ruta 4 (`foto_Q_ruta_008.jpg`, sin cinta): la misma posición respecto a la cruz. Desde la puerta no hay corrección
+(`map_corr_y_max` 10.2; la última RELOC es en E-Door_2): ~3.5 m de odometría con dos giros. Como se repite, lo probable
+es que Q (o el mapa detrás de la puerta) no coincida con la cruz, no deriva.
+
+## Pendiente (actualizado)
+
+1. Reintentar la relocalización en cada SIN_CAMINO junto a la puerta mientras no haya salido `total` (alguien tapando el
+   final de la canaleta deja ahora el robot parado para siempre).
+2. Error en Q: con los bags 4 y 6, corrección con el mapa en sombra más allá de Y = 10.2 y ajuste a las paredes en Q.
+   Si el mapa es bueno ahí, activarla; si no, recolocar Q y los waypoints de detrás de la puerta según la cruz.
+3. Velocidad: 0.15 global (solo el yaml); después perfil por tramos (rápido en rectas, ~0.10 cerca de obligatorios,
+   puerta y replanes; `block_lookahead` mayor en rectas), probado en Gazebo, y rectas a 0.18 → 0.20 (0.22 es el
+   máximo del motor: sin margen para corregir el rumbo).
+4. El obstáculo fijo en (7.55, 12.9).
