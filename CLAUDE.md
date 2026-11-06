@@ -131,13 +131,14 @@ Hay **dos**: la buena es la del enunciado (cuadrada, 4 pilares); la otra, triang
 | | Rectangular, en R (7.500, 16.170) | Triangular, en T (2.136, 15.300) |
 |---|---|---|
 | Patas | 4 cilindros de Ø 5 cm | 3 cilindros de Ø 5 cm |
-| Lado entre patas | 49 cm (cuadrado; diagonal 69.3 cm) | 49 cm (equilátero) |
+| Lado, de extremo a extremo de las patas | 49 cm → **44 cm entre centros** (cuadrado; diagonal 62.2) | 49 cm → **44 cm entre centros** (equilátero) |
 | Altura libre bajo los listones | 25 cm | 25 cm |
 | Centro | sobre la cruz de R | sobre la cruz de T |
 
-- 49 cm: **supuesto entre centros** de patas (sin confirmar). Orientación de cada estación respecto a las paredes: **sin medir**.
+- 49 cm medido de extremo a extremo (caras exteriores): 44 entre centros, 39 de hueco libre. Orientación de cada
+  estación respecto a las paredes: **sin medir**.
 - El LiDAR (a ~18 cm) ve solo las patas: los listones empiezan a 25 cm. El Burger (~19 cm de alto, 17.8 de ancho) cabe
-  debajo, con ~13 cm por lado entre patas: la fase III es entrar y parar sobre la cruz.
+  debajo, con ~10.6 cm por lado entre patas (39 cm de hueco): la fase III es entrar y parar sobre la cruz.
 - `range_max` del /scan: 3.5 m. Con ~1° entre rayos, una pata da 2-3 puntos a ≤ 1.2 m; a 2.2 m (desde Q), 0-1.
 - Suelo irregular del pasillo: sigue **estimado**; deja P Base a 0.15 m (inalcanzable con inflado 0.25). Medir.
 
