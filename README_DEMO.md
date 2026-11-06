@@ -130,8 +130,15 @@ ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --pa
 ```
 Dos pasadas a lo largo de todo el pasillo (todo queda a ≤ 1.2 m del robot) y vuelta a **P Base**. ~5 min a 0.12 m/s.
 Las estaciones y los obstáculos se esquivan; las patas quedan como `OBSTACULO` en el Mission Log.
-**Limitaciones (06/11):** no identifica todavía cuál es la estación cuadrada, el log sigue diciendo fase "I", y llega
-a P Base con ~15-20 cm de error (sin corrección en el pasillo).
+**Estaciones:** el detector de pilares (`pilares.py`) las identifica solo, dentro de `pillar_zone` (el pasillo). Cuando
+ha visto una en 5 scans, el Mission Log y la terminal dicen dónde está:
+- `ESTACION_CUADRADA` (la buena) o `ESTACION_TRIANGULAR` (la que hay que descartar): centro en `obstacle_x/obstacle_y`,
+  y ángulo de la estación (grados) en `error`;
+- seguidas de una fila `PILAR` por pata, con su posición en `obstacle_x/obstacle_y`.
+
+La posición es la de la pose del robot en ese momento: hereda su error (en el pasillo, sin SLAM, ~10 cm).
+**Limitaciones:** el log sigue diciendo fase "I", la ruta no cambia al encontrar la estación, y llega a P Base con
+~15-20 cm de error (sin corrección en el pasillo).
 
 ## 5. Guardar el mapa del SLAM (al llegar a P Base, con el SLAM aún en marcha)
 

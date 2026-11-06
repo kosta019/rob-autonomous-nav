@@ -22,6 +22,7 @@ from sensor_msgs.msg import Imu, LaserScan
 from nav_msgs.msg import Odometry
 
 from autonomous_nav import comprobar_pose as cp
+from autonomous_nav import pilares as pil
 from autonomous_nav import planificador as pl
 
 BLOQUEO_ACERCARSE = 0.005   # m: dentro del inflado, la ruta bloquea si se acerca al obstáculo más que esto (ruta_bloqueada)
@@ -420,6 +421,14 @@ class Fase1Node(Node):
         # La parada de emergencia del cono frontal NO usa este filtro.
         self.alcance_min_obstaculos = self.declare_parameter('obstacle_min_range', D).value
         self.giro_max_obstaculos = self.declare_parameter('obstacle_max_turn_rate', D).value
+        # Pilares de las estaciones de carga (fase II, pilares.py)
+        self.zona_pilares = self.declare_parameter('pillar_zone', DA).value   # [x_min, x_max, y_min, y_max]
+        self.pilar_alcance = self.declare_parameter('pillar_max_range', D).value
+        self.pilar_min_det = self.declare_parameter('pillar_min_detections', Parameter.Type.INTEGER).value
+        self.pilar_olvido = self.declare_parameter('pillar_forget_time', D).value
+        self.estacion_lado = self.declare_parameter('station_side', D).value
+        self.estacion_tol = self.declare_parameter('station_tol', D).value
+        self.estacion_confirmar = self.declare_parameter('station_confirm_scans', Parameter.Type.INTEGER).value
         self.alcance_bloqueo = self.declare_parameter('block_lookahead', D).value
         self.histeresis = self.declare_parameter('block_hysteresis', D).value
         self.espera = self.declare_parameter('obstacle_wait_time', D).value
@@ -518,6 +527,9 @@ class Fase1Node(Node):
         self.obstaculos = {}
         self.scan_borrado = None    # último scan con el que se contaron esos escaneos (se cuenta una vez por scan)
         self.obstaculos_log = []    # posiciones ya escritas en el Mission Log
+        self.scan_pilares = None    # último scan pasado por el detector de pilares (uno por scan)
+        self.grupos_pilares = []    # [x, y, n, t_ultimo] de cada pilar visto hace poco (pilares.agrupar)
+        self.estaciones = []        # estaciones encontradas: {'tipo', 'x', 'y', 'ang', 'patas', 'vistas'}
         self.t_espera = None        # cuándo empezó la espera en ESPERAR
         self.n_replan = 0
         self.w_anterior = 0.0       # última velocidad angular mandada
@@ -697,6 +709,45 @@ class Fase1Node(Node):
                     del self.obstaculos[celda]
             else:
                 ob[3] = 0
+
+    def detectar_pilares(self, x, y, th, ahora):
+        # Fase II: patas de las estaciones de carga (pilares.py). Una vez por scan nuevo y, como la memoria de
+        # obstáculos, no girando deprisa (el scan llega con retraso respecto a la pose).
+        # Solo cuentan los pilares dentro de pillar_zone (el pasillo): en la sala, las patas de sillas y mesas podrían
+        # formar un cuadrado de 44 cm.
+        msg = self.scan
+        if msg is self.scan_pilares or abs(self.w_anterior) > self.giro_max_obstaculos:
+            return
+        self.scan_pilares = msg
+        vistos = pil.pilares_scan(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max,
+                                  alcance=self.pilar_alcance)
+        x0, x1, y0, y1 = self.zona_pilares
+        puntos = [p for p in pil.a_mundo(vistos, (x, y, th), self.lidar_offset_x)
+                  if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
+        pil.agrupar(self.grupos_pilares, puntos, ahora)
+        pil.olvidar(self.grupos_pilares, ahora, self.pilar_olvido)
+        est = pil.buscar_estacion([(g[0], g[1]) for g in self.grupos_pilares if g[2] >= self.pilar_min_det],
+                                  self.estacion_lado, self.estacion_tol)
+        if est is None:
+            return
+        tipo, cx, cy, ang, patas = est
+        # ¿Es una que ya conocemos? (del mismo tipo y con el centro a menos de un lado)
+        for e in self.estaciones:
+            if e['tipo'] == tipo and math.hypot(e['x'] - cx, e['y'] - cy) < self.estacion_lado:
+                break
+        else:
+            e = {'vistas': 0}
+            self.estaciones.append(e)
+        # Se guarda la última estimación (los grupos ya promedian muchos scans)
+        e.update(tipo=tipo, x=cx, y=cy, ang=ang, patas=patas)
+        e['vistas'] += 1
+        # Al Mission Log, una vez, cuando ya se ha visto en station_confirm_scans scans: el centro (con el ángulo de la
+        # estación en grados en la columna error) y cada pata
+        if e['vistas'] == self.estacion_confirmar:
+            self.get_logger().info(f'Estación {tipo} en ({cx:.2f}, {cy:.2f}), {math.degrees(ang):.1f}°')
+            self.escribir_log(x, y, th, 'ESTACION_' + tipo.upper(), math.degrees(ang), cx, cy)
+            for px, py in patas:
+                self.escribir_log(x, y, th, 'PILAR', None, px, py)
 
     def ruta_bloqueada(self, x, y, extra=0.0):
         # Obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m).
@@ -1069,6 +1120,7 @@ class Fase1Node(Node):
         # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
         ahora_s = self.get_clock().now().nanoseconds * 1e-9
         self.actualizar_obstaculos(x, y, th, ahora_s)
+        self.detectar_pilares(x, y, th, ahora_s)
         if self.estado in ('GIRAR', 'AVANZAR'):
             bloqueo = self.ruta_bloqueada(x, y)
             if bloqueo is not None and self.reloc_adelantable(x, y):

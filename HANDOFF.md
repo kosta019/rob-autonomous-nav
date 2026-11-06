@@ -51,13 +51,14 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 
 ## Lo que queda, por orden
 
-1. **Detector de pilares (fase II).** Prototipo en `test_real/datos_20261106/scripts_tarde/pilares_scan.py`: segmentos
-   del scan de 1-8 rayos, ancho ≤ 9 cm, aislados. Solo saca 1 de 4 patas en `bag_fase1_20261106_171005` (aproximación a R:
-   en bruto se ven las 4 a 0.70/8°, 0.88/37°, 1.14/4°, 1.23/24°): el test de aislamiento falla cuando hay algo detrás
-   cerca. Luego: agrupar en el mundo, identificar **4 en cuadrado de 44 cm** (diagonal 62.2) frente a **3 a 44 cm**, y
-   escribir en el Mission Log la posición de cada pilar y de la estación. Verdad de tierra: R en (7.17, 16.51), paralela a
-   las paredes. Otros bags: `bag_fase1_20261106_161359` (rodeo de R y T; ojo, R allí sale con el mismo desfase),
-   `bag_fase1_20261106_163111` (ensayo con SLAM, dos pasadas por el pasillo).
+1. **Detector de pilares (fase II): HECHO** (rama `fase2-pilares`, sin probar en el robot, pero sí con el nodo real
+   reproduciendo los bags). `autonomous_nav/pilares.py` (solo numpy) + `Fase1Node.detectar_pilares` → filas
+   `ESTACION_CUADRADA` / `ESTACION_TRIANGULAR` y `PILAR` en el Mission Log (README_DEMO, fase II). El prototipo perdía
+   patas porque junto a ellas sale un rayo a 0.0 (sin dato) que tomaba por "algo más cerca". Resultados: bag 17:10 →
+   cuadrada en (7.17, 16.50), −2.4° (cinta: 7.17, 16.51, paralela); bag 16:13 → R y T, cada una una vez; bag 16:31 →
+   R y T, ninguna estación falsa. Las pasadas largas sitúan R a ~10 cm (deriva de la pose: lo arregla el SLAM).
+   Herramientas sin ROS en el portátil: `scripts/leer_mcap.py`, `scripts/pilares_bag.py`; con Docker: `docker/tests.sh`
+   (todos los tests) y `docker/reproducir_bag.sh` (el nodo con un bag grabado).
 2. **Localización con SLAM en el pasillo.** El usuario lo ha decidido. Comando que usan:
    `ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false` (arrancado con el robot en A). En el bag de las
    16:31 (`bag_fase1_20261106_163111`) están /tf con map→odom y /map: se puede desarrollar offline. Hay que fijar la

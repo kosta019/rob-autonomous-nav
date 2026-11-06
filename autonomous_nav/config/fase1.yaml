@@ -60,6 +60,17 @@ fase1_node:
                                  #   La parada de emergencia no lo usa. comprobar_pose avisa si hay ecos más cerca.
     obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria (el scan llega con retraso
                                  #   y las paredes aparecen desplazadas: con 0.8 rad/s se veían obstáculos falsos)
+
+    # ---------- Pilares de las estaciones de carga (fase II, pilares.py) ----------
+    pillar_zone: [-0.55, 9.57, 13.00, 17.15]   # [x_min, x_max, y_min, y_max]: el pasillo exterior (paredes medidas el
+                                 #   06/11: fondo X 9.57, extintor Y 17.15; mapa: X -0.55, Y 13.00 en la parte ancha).
+                                 #   Fuera no cuenta ningún pilar: en la sala, patas de sillas y mesas.
+    pillar_max_range: 1.6        # m: más lejos, una pata da 0-1 rayos (a 1.2 m, 2-3)
+    pillar_min_detections: 3     # detecciones para que un grupo cuente como pilar
+    pillar_forget_time: 3.0      # s sin ver un pilar para olvidarlo: la pose deriva y juntar mucho rato mezcla las patas
+    station_side: 0.44           # m entre centros de patas (medido el 06/11: 49 de extremo a extremo, patas de 5 cm)
+    station_tol: 0.05            # m de error admitido en cada lado/diagonal
+    station_confirm_scans: 5     # scans viendo la estación antes de escribirla en el Mission Log
     block_lookahead: 1.5         # m de ruta por delante en los que se busca bloqueo (a menos de inflation_radius)
     block_hysteresis: 0.10       # m: para dar la ruta por LIBRE se pide esto de más (en distancia y en alcance)
     obstacle_wait_time: 3.0      # s parado antes de replanificar (por si es una persona que pasa)
