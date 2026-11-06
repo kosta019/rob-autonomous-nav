@@ -155,3 +155,14 @@ def test_q_tapado_relocaliza_en_el_sustituto():
     n.sustitutos = {'Q~': ('Q', 8.970, 14.497)}
     Fase1Node.maquina_estados(n, 8.80, 14.60, 0.0)
     assert (n.estado, n.reloc_tipo) == ('RELOC', 'Q')
+
+
+def test_rampa_acelera_poco_a_poco_y_frena_de_golpe():
+    from autonomous_nav.fase1_node import rampa
+    v, pasos = 0.0, 0
+    while v < 0.20:
+        v = rampa(0.20, v, 0.20 * 0.1)      # 0.2 m/s² a 10 Hz
+        pasos += 1
+    assert pasos == 10
+    assert rampa(0.0, 0.20, 0.02) == 0.0    # parada: inmediata
+    assert rampa(0.05, 0.20, 0.02) == 0.05

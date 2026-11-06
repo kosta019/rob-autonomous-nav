@@ -204,3 +204,28 @@ es que Q (o el mapa detrás de la puerta) no coincida con la cruz, no deriva.
 2. Velocidad: 0.15 global; después perfil por tramos (rectas a 0.18 → 0.20), probado en Gazebo.
 3. El bloqueo fijo tras Door-Q_1 en (7.55, 12.9): ¿qué hay ahí que no está en el mapa?
 4. Borde lejano de las mesas (X 1.50) sin medir; no afecta a la ruta.
+
+## Ruta 10 (15:29-15:34): 0.20 m/s
+
+- `real.yaml`: `max_linear_speed` 0.20 (sin otros cambios). Batería 11.28 V (12.06 a las 14:20): **cargada para el vídeo**.
+- **1.er intento (`mission_log_020_oscila_sin_rampa.csv`): oscilaba sin avanzar** (50 cm en 17 s). Al arrancar a 0.20
+  de golpe, el rumbo de /odom (del IMU de la OpenCR) saltaba ~30° en 0.6 s (imposible con 0.4 rad/s): GIRAR, se
+  corrige, AVANZAR, otro salto... El robot cabecea con el tirón. **Arreglo: `max_linear_accel` 0.20 m/s²** (rampa
+  solo al acelerar; frenar sigue siendo inmediato). Ctrl+C.
+- **2.º intento (`mission_log_ruta_completa_020.csv`, bag `bag_fase1_20261106_152819`, los dos intentos): A → Q en
+  3:12**, sobre la cruz. Sin oscilar. CORR_MAPA mediana 0.7 cm / 0.4 cm / 0.2°.
+  - **RELOC_REINTENTO probado:** `RELOC_PARCIAL sin_borde` → BLOQUEO → SIN_CAMINO → `RELOC_REINTENTO 1` →
+    `RELOC dy=-0.485 Y=canaleta` → sigue. Sin él se habría quedado parado (como la ruta 5).
+  - `RELOC_Q dx=-0.230 dy=+0.130 dth=-5.23` y la segunda ~1 cm.
+  - **Bucle junto a E, ~25 s:** obstáculo en (5.24, 5.88), a 0.22 m del robot (dentro del inflado 0.25): todo camino
+    que sale del robot pasa a < 0.25, aunque se aleje. REPLANIFICACION y BLOQUEO cada 2 s hasta que se apartó.
+    **Arreglo: `ruta_bloqueada` ignora un obstáculo ya dentro del inflado si la ruta no se le acerca más
+    (`BLOQUEO_ACERCARSE` 5 mm).** Tests con esa geometría en `test_bloqueo.py`. Sin probar en el robot.
+  - Bloqueo de siempre tras Door-Q_1 (~15 s).
+
+### El bloqueo tras Door-Q_1 (7.55, 12.9)
+
+No es un objeto ni un reflejo: el LiDAR ve el marco/la esquina de la pared a la izquierda a 0.24-0.50 m (lecturas estables
+y de intensidad alta), y la ruta pasa a ~0.96 m de esa esquina: la pose ya va mal en ese tramo. Las paredes del vestíbulo
+y del pasillo no son paralelas a las de la sala (0-10° según dónde, con el LiDAR), y con el error de pose no se separan.
+La RELOC_Q lo corrige al final. Pendiente con la fase II (habrá que localizarse en el pasillo igualmente).

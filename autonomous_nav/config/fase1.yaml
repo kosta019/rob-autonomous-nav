@@ -28,6 +28,8 @@ fase1_node:
     max_linear_speed: 0.15       # m/s (máximo del Burger: 0.22)
     max_angular_speed: 0.8       # rad/s (máximo del Burger: 2.84)
     k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
+    max_linear_accel: 0.20       # m/s²: la v sube como mucho esto por segundo (frenar, sin límite). 0 a 0.20 m/s en 1 s.
+                                 #   06/11: sin rampa, a 0.20 el tirón hacía saltar el rumbo del IMU ~30° y oscilaba
     k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
     turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar
     reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, volver a GIRAR

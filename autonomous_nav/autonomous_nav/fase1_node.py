@@ -24,6 +24,8 @@ from nav_msgs.msg import Odometry
 from autonomous_nav import comprobar_pose as cp
 from autonomous_nav import planificador as pl
 
+BLOQUEO_ACERCARSE = 0.005   # m: dentro del inflado, la ruta bloquea si se acerca al obstáculo más que esto (ruta_bloqueada)
+
 
 def normalizar(a):
     # Ángulo en (-pi, pi]
@@ -226,6 +228,11 @@ def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy,
     return dx, dy, dth, n
 
 
+def rampa(v, v_anterior, paso):
+    # Al acelerar, como mucho 'paso' más que la velocidad anterior; al frenar (o parar), sin límite
+    return min(v, v_anterior + paso) if v > v_anterior else v
+
+
 def longitud_camino(puntos):
     return float(sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(puntos, puntos[1:])))
 
@@ -322,6 +329,10 @@ class Fase1Node(Node):
         obligatorios = self.declare_parameter('mandatory_waypoints', SA).value
 
         control_rate = self.declare_parameter('control_rate', D).value
+        self.dt_control = 1.0 / control_rate
+        # Rampa de aceleración (solo al acelerar; frenar es inmediato). 06/11: de 0 a 0.20 m/s de golpe, el robot
+        # cabeceaba y el rumbo de /odom (del IMU de la OpenCR) saltaba ~30°: GIRAR/AVANZAR sin avanzar.
+        self.acel_max = self.declare_parameter('max_linear_accel', D).value
         self.tol_waypoint = self.declare_parameter('tol_waypoint', D).value
         self.tol_obligatorio = self.declare_parameter('tol_mandatory', D).value
         self.tol_final_yaw = self.declare_parameter('tol_final_yaw', D).value
@@ -490,6 +501,7 @@ class Fase1Node(Node):
         self.t_espera = None        # cuándo empezó la espera en ESPERAR
         self.n_replan = 0
         self.w_anterior = 0.0       # última velocidad angular mandada
+        self.v_anterior = 0.0       # última velocidad lineal mandada (rampa de aceleración)
         self.reloc_scans_lista = [] # scans juntados en RELOC
         self.t_sin_camino = None    # desde cuándo no hay camino (para el obligatorio tapado)
         self.sustitutos = {}        # nombre del sustituto -> (obligatorio, x, y)
@@ -697,8 +709,16 @@ class Fase1Node(Node):
         s = np.vstack(muestras)
         o = np.array([(v[0], v[1]) for v in self.obstaculos.values()])
         d = np.hypot(s[:, None, 0] - o[None, :, 0], s[:, None, 1] - o[None, :, 1]).min(axis=0)
-        k = int(np.argmin(d))
-        return (o[k, 0], o[k, 1]) if d[k] < self.inflado + extra else None
+        # Un obstáculo que ya está a menos de inflation_radius del robot solo bloquea si la ruta se le acerca todavía más.
+        # 06/11 15:32: con algo a 0.22 m del robot junto a E, cualquier camino (que sale del robot) pasaba a < 0.25 aunque
+        # se alejara: REPLANIFICACION y BLOQUEO cada 2 s durante 25 s. Acercarse sigue bloqueando; la parada de
+        # emergencia del cono frontal no cambia.
+        d_robot = np.hypot(o[:, 0] - x, o[:, 1] - y)
+        bloquea = (d < self.inflado + extra) & (d < d_robot - BLOQUEO_ACERCARSE)
+        if not np.any(bloquea):
+            return None
+        k = int(np.argmin(np.where(bloquea, d, np.inf)))
+        return o[k, 0], o[k, 1]
 
     def esperar(self, x, y, th, ahora):
         # Estado ESPERAR (robot parado). Si la ruta se libera, se sigue con el plan que había.
@@ -1026,8 +1046,10 @@ class Fase1Node(Node):
             self.get_logger().info('Cono libre: sigo')
             self.escribir_log(x, y, th, 'FIN_PARADA')
 
+        v = rampa(v, self.v_anterior, self.acel_max * self.dt_control)
         self.publicar_vel(v, w)
         self.w_anterior = w
+        self.v_anterior = v
 
         # 5. Fila periódica del log
         ahora = self.get_clock().now()

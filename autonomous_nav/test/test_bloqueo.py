@@ -69,3 +69,21 @@ def test_lejos_del_waypoint_no():
 def test_si_el_siguiente_no_es_la_puerta_no():
     n = nodo_reloc([('E-Door_1', 5.115, 7.005, 0.07), ('E-Door_2', 5.915, 11.455, 0.07)])
     assert not Fase1Node.reloc_adelantable(n, 5.10, 6.90)
+
+
+# 06/11 15:32: algo a 0.22 m del robot junto a E (dentro del inflado de 0.25). Un camino que se aleja no bloquea;
+# uno que se le acerca, sí.
+OBST_E = (5.24, 5.88)
+ROBOT_E = (5.03, 5.94)
+
+
+def test_alejarse_de_un_obstaculo_cercano_no_bloquea():
+    n = nodo_falso([('E', 5.082, 6.122, 0.02)], OBST_E)
+    n.sustitutos = {}
+    assert Fase1Node.ruta_bloqueada(n, *ROBOT_E) is None
+
+
+def test_acercarse_a_un_obstaculo_cercano_bloquea():
+    n = nodo_falso([('E', 5.30, 6.00, 0.02)], OBST_E)
+    n.sustitutos = {}
+    assert Fase1Node.ruta_bloqueada(n, *ROBOT_E) is not None
