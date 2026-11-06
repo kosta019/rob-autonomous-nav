@@ -68,16 +68,18 @@ def punto_sustituto(holgura, meta, ox, oy, inflado, radio):
 
 
 def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
-                  min_cercano, max_dx, max_dy, max_ang, fondo_marco):
+                  min_cercano, max_dx, max_dy, max_ang, fondo_marco, y_fin_canaleta=None):
     # Relocalización con la pared de la puerta (lado sala), con el robot parado. px, py: puntos del scan pasados al
     # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. Referencias CALIBRADAS con el robot en una pose
     # medida con cinta: x_pared = X a la que el LiDAR ve la pared (la canaleta) e y_borde = Y del lateral del marco
     # del borde cercano del hueco.
     # 1. Rumbo y X: recta x = a + b*y con el tramo de pared cercano (la hoja de la puerta, en el lado lejano, no entra).
     # 2. Y: el lateral del marco (puntos detrás de la recta justo donde se acaba la pared). El ancho es solo un aviso.
+    #    Si desde aquí no se ve el marco, la Y sale del final de la canaleta (y_fin_canaleta): motivo 'canaleta'.
     # Devuelve (dx, dy, dth, nivel, motivo, datos): la corrección a sumar a la pose creída; nivel 'total' (dx, dy,
     # dth), 'parcial' (solo dx y dth: la Y no es fiable) o '' (nada: la recta no es fiable); motivo; y lo medido.
-    datos = {'n': 0, 'rms': None, 'x_linea': None, 'y1': None, 'y2': None, 'ancho': None, 'aviso_ancho': False}
+    datos = {'n': 0, 'rms': None, 'x_linea': None, 'y1': None, 'y2': None, 'ancho': None, 'aviso_ancho': False,
+             'y_fin': None}
     en_banda = np.abs(px - x_pared) < banda
     sel = en_banda & (py > y_borde - largo - max_dy) & (py < y_borde + max_dy + 0.10)
     x, y = px[sel], py[sel]
@@ -154,8 +156,16 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         return dx, 0.0, dth, '', 'dth', datos
     # 3. Borde cercano: el lateral del marco, justo donde acaba el tramo de pared (la canaleta)
     qx, qy = girar(px[en_banda], py[en_banda])
-    y1 = marco_y(datos['x_linea'], qx, qy, float(np.max(yr)))
+    yfin = float(np.max(yr))
+    datos['y_fin'] = yfin
+    y1 = marco_y(datos['x_linea'], qx, qy, yfin)
     if y1 is None:
+        # Sin marco: el final de la canaleta. Creíble solo si justo después hay un escalón hacia atrás (el yeso); algo
+        # apoyado en la pared cortaría el tramo, pero quedaría por delante de la recta, no por detrás.
+        escalon = ((qx > datos['x_linea'] + 0.02) & (qx < datos['x_linea'] + 0.20)
+                   & (qy > yfin) & (qy < yfin + 0.20))
+        if y_fin_canaleta is not None and np.sum(escalon) >= 2 and abs(y_fin_canaleta - yfin) <= max_dy:
+            return dx, y_fin_canaleta - yfin, dth, 'total', 'canaleta', datos
         return dx, 0.0, dth, 'parcial', 'sin_borde', datos
     datos['y1'] = y1
     # Borde creíble: pared justo antes de y1, y nada sobre la línea de pared en los 0.5*ancho siguientes
@@ -174,6 +184,43 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
     if abs(dy) > max_dy:
         return dx, dy, dth, 'parcial', 'dy', datos
     return dx, dy, dth, 'total', '', datos
+
+
+def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy, sig_th, min_puntos):
+    # Corrección de la pose con el mapa: la actualización del EKF (Localization, diapositivas 10-11), con cada punto del
+    # LiDAR cerca de una pared como una medida. 'mapa' tiene, por celda, la distancia a la pared y su gradiente.
+    # Si el punto está a distancia d de la pared, mover el robot (dx, dy, dth) debería llevarlo a d = 0:
+    #     g * (dx, dy) + rotación * dth = -d
+    # Se resuelve por mínimos cuadrados, con un término que mantiene (dx, dy, dth) cerca de 0: la confianza en la
+    # predicción de la odometría. Así, lo que las paredes no observan (avanzar a lo largo de un pasillo) no se mueve.
+    # Solo se usan los puntos a menos de 'ventana' de una pared: mesas, sillas y personas quedan fuera.
+    # Devuelve (dx, dy, dth, n), con n los puntos usados; (0, 0, 0, n) si son menos de min_puntos.
+    res = meta['resolucion']
+    info = np.diag([1.0 / sig_xy ** 2, 1.0 / sig_xy ** 2, 1.0 / sig_th ** 2])
+    dx, dy, dth = 0.0, 0.0, 0.0
+    n = 0
+    for _ in range(3):                  # 3 iteraciones: la normal de cada punto cambia al mover la pose
+        rx, ry, rth = x + dx, y + dy, th + dth
+        lx = rx + offset * math.cos(rth)
+        ly = ry + offset * math.sin(rth)
+        px = lx + r * np.cos(rth + a)
+        py = ly + r * np.sin(rth + a)
+        fi = np.floor((px - meta['origen_x']) / res).astype(int)
+        co = np.floor((py - meta['origen_y']) / res).astype(int)
+        dentro = (fi >= 0) & (fi < mapa.shape[1]) & (co >= 0) & (co < mapa.shape[2])
+        fi, co, px, py = fi[dentro], co[dentro], px[dentro], py[dentro]
+        d = mapa[0, fi, co]
+        u = d < ventana
+        n = int(np.sum(u))
+        if n < min_puntos:
+            return 0.0, 0.0, 0.0, n
+        gx, gy = mapa[1, fi[u], co[u]], mapa[2, fi[u], co[u]]
+        J = np.column_stack([gx, gy, -gx * (py[u] - ry) + gy * (px[u] - rx)])
+        A = J.T @ J / sig_medida ** 2 + info
+        b = -J.T @ d[u] / sig_medida ** 2 - info @ np.array([dx, dy, dth])
+        paso = np.linalg.solve(A, b)
+        dx, dy, dth = dx + float(paso[0]), dy + float(paso[1]), dth + float(paso[2])
+    return dx, dy, dth, n
 
 
 class Fase1Node(Node):
@@ -226,6 +273,20 @@ class Fase1Node(Node):
         self.reloc_comprobar_dist = self.declare_parameter('reloc_check_dist', D).value
         self.reloc_comprobar_ang = math.radians(self.declare_parameter('reloc_check_angle_deg', D).value)
         self.reloc_max_ang = math.radians(self.declare_parameter('reloc_max_angle_deg', D).value)
+        self.reloc_fin_canaleta = self.declare_parameter('reloc_duct_end_y', D).value
+        # Corrección continua con el mapa de distancias. Modo: "apagado", "sombra" (calcula y registra, no aplica) o "activo"
+        self.corr_modo = self.declare_parameter('map_corr_mode', Parameter.Type.STRING).value
+        self.corr_cada = self.declare_parameter('map_corr_every_scans', Parameter.Type.INTEGER).value
+        self.corr_max_w = self.declare_parameter('map_corr_max_turn_rate', D).value
+        self.corr_y_max = self.declare_parameter('map_corr_y_max', D).value
+        self.corr_alcance = self.declare_parameter('map_corr_max_range', D).value
+        self.corr_ventana = self.declare_parameter('map_corr_window', D).value
+        self.corr_sig_medida = self.declare_parameter('map_corr_sigma_range', D).value
+        self.corr_sig_xy = self.declare_parameter('map_corr_sigma_xy', D).value
+        self.corr_sig_th = math.radians(self.declare_parameter('map_corr_sigma_angle_deg', D).value)
+        self.corr_max_xy = self.declare_parameter('map_corr_max_step', D).value
+        self.corr_max_th = math.radians(self.declare_parameter('map_corr_max_angle_deg', D).value)
+        self.corr_min_puntos = self.declare_parameter('map_corr_min_points', Parameter.Type.INTEGER).value
         self.usar_imu = self.declare_parameter('use_imu_yaw', Parameter.Type.BOOL).value
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
         self.log_period = self.declare_parameter('log_period', D).value
@@ -273,6 +334,17 @@ class Fase1Node(Node):
         with open(ruta.replace('.npy', '.yaml')) as f:
             m = yaml.safe_load(f)
         self.meta = {'resolucion': m['resolucion'], 'origen_x': m['origen_x'], 'origen_y': m['origen_y']}
+
+        # Mapa de distancias para la corrección con el mapa (lo genera scripts/generar_mapa_distancias.py)
+        self.corr_ultimo_scan = None
+        self.corr_cuenta = 0
+        if self.corr_modo != 'apagado':
+            ruta = self.declare_parameter('map_corr_file', Parameter.Type.STRING).value
+            if not os.path.isabs(ruta):
+                ruta = os.path.join(get_package_share_directory('autonomous_nav'), ruta)
+            self.corr_mapa = np.load(ruta)
+            with open(ruta.replace('.npy', '.yaml')) as f:
+                self.corr_meta = yaml.safe_load(f)
 
         # 2. Lista de objetivos: (nombre, x, y, tolerancia). Al final, la posición de la pose final.
         if not (len(nombres) == len(xs) == len(ys)):
@@ -586,6 +658,42 @@ class Fase1Node(Node):
                 return inflado, time.perf_counter() - t0
         return None, time.perf_counter() - t0
 
+    # ---------- Corrección continua con el mapa ----------
+
+    def corregir_con_mapa(self, x, y, th):
+        # Cada map_corr_every_scans scans nuevos: si el robot casi no gira (la lectura llega con retraso respecto a la
+        # pose) y aún no está en el tramo de la puerta (allí corrige ajuste_puerta), se compara el scan con el mapa.
+        # Modo "activo": aplica la corrección, limitada por paso. Modo "sombra": solo la escribe en el log.
+        # Devuelve la pose con la que seguir este ciclo.
+        msg = self.scan
+        if self.corr_modo == 'apagado' or msg is self.corr_ultimo_scan:
+            return x, y, th
+        self.corr_ultimo_scan = msg
+        self.corr_cuenta += 1
+        if (self.corr_cuenta % self.corr_cada != 0 or abs(self.w_anterior) > self.corr_max_w or y > self.corr_y_max
+                or self.estado not in ('GIRAR', 'AVANZAR', 'ESPERAR')):
+            return x, y, th
+        r = np.array(msg.ranges, dtype=float)
+        a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+        ok = (np.isfinite(r) & (r >= max(msg.range_min, self.alcance_min_obstaculos))
+              & (r <= min(msg.range_max, self.corr_alcance)))
+        ok[1::2] = False                # con uno de cada dos rayos basta
+        dx, dy, dth, n = ajuste_mapa(r[ok], a[ok], x, y, th, self.lidar_offset_x, self.corr_mapa, self.corr_meta,
+                                     self.corr_ventana, self.corr_sig_medida, self.corr_sig_xy, self.corr_sig_th,
+                                     self.corr_min_puntos)
+        if n < self.corr_min_puntos:
+            return x, y, th
+        texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f} n={n}'
+        if self.corr_modo != 'activo':
+            self.escribir_log(x, y, th, f'CORR_MAPA_SOMBRA {texto}', math.hypot(dx, dy))
+            return x, y, th
+        nx = x + limitar(dx, self.corr_max_xy)
+        ny = y + limitar(dy, self.corr_max_xy)
+        nth = normalizar(th + limitar(dth, self.corr_max_th))
+        self.fijar_pose(nx, ny, nth)
+        self.escribir_log(nx, ny, nth, f'CORR_MAPA {texto}', math.hypot(dx, dy))
+        return nx, ny, nth
+
     # ---------- Relocalización con las paredes ----------
 
     def relocalizar(self, x, y, th):
@@ -616,7 +724,7 @@ class Fase1Node(Node):
             return
         if nivel == 'total':
             nx, ny, nth = x + dx, y + dy, normalizar(th + dth)
-            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}'
+            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}' + (f' Y={motivo}' if motivo else '')
             self.get_logger().info(f'Relocalización: {texto} ({medido})')
             self.escribir_log(nx, ny, nth, f'RELOC {texto}', math.hypot(dx, dy))
         else:
@@ -646,7 +754,7 @@ class Fase1Node(Node):
         return ajuste_puerta(px, py, x, y, self.reloc_pared_x, self.reloc_borde_y, self.reloc_ancho,
                              self.reloc_tol_ancho, self.reloc_banda, self.reloc_largo, self.reloc_max_rms,
                              self.reloc_min_puntos, self.reloc_min_cercano, self.reloc_max_dx, self.reloc_max_dy,
-                             self.reloc_max_ang, self.reloc_fondo_marco)
+                             self.reloc_max_ang, self.reloc_fondo_marco, self.reloc_fin_canaleta)
 
     def fijar_pose(self, x, y, th):
         # Que pose_mundo() pase a dar (x, y, th) sin tocar lo integrado desde la salida (x_rel, y_rel, th_rel):
@@ -678,6 +786,8 @@ class Fase1Node(Node):
         if self.hueco_imu is not None:
             self.escribir_log(x, y, th, 'IMU_HUECO', self.hueco_imu)
             self.hueco_imu = None
+
+        x, y, th = self.corregir_con_mapa(x, y, th)
 
         # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
         ahora_s = self.get_clock().now().nanoseconds * 1e-9

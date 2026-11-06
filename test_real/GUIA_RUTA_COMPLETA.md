@@ -21,6 +21,8 @@ Si hay un bag viejo grabando, páralo con Ctrl+C. Después:
 ```bash
 cd ~/ros2_ws/src/rob-autonomous-nav && source /opt/ros/jazzy/setup.bash && export ROS_DOMAIN_ID=11 && test_real/grabar.sh
 ```
+Comprueba que escribe `Grabando en ...` y, desde otra terminal, que la carpeta tiene la hora actual:
+`ls -td ~/ros2_ws/src/rob-autonomous-nav/bags/fase1_* | head -1`. Sin esto se perdió el bag de las 17:41 del 05/11.
 
 ## 2. Robot en A, quieto, mirando a +X, nadie a menos de 1 m
 ```bash
@@ -52,6 +54,10 @@ ros2 run autonomous_nav fase1_node --ros-args \
 - Seguridad: nadie delante de E ni en la puerta; quien acompañe, detrás o a un lado a más de 0.5 m; freno de
   emergencia = interruptor de la OpenCR; no tocar el robot.
 - Al terminar: Ctrl+C en el nodo y en el bag. Si se puede, medir con cinta la pose final en Q.
+
+Corrección con el mapa: `map_corr_mode` en `real.yaml` ("sombra" solo registra, "activo" corrige, "apagado" nada).
+Resumen tras la ruta: `python3 src/rob-autonomous-nav/test_real/corr_mapa_log.py $(ls -t mission_log_*.csv | head -1)`.
+**Si `RELOC_PARCIAL`, `RELOC_RECHAZADA` o `RELOC_INCONSISTENTE`: Ctrl+C antes de que entre en la puerta** (la Y puede estar ~0.4 m mal).
 
 ## 4. Análisis
 Eventos del Mission Log (el último de `~/ros2_ws`):

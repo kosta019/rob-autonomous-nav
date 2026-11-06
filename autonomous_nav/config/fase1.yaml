@@ -79,6 +79,8 @@ fase1_node:
     reloc_edge_y: 11.245         # m: Y del lateral del marco del borde cercano del hueco (el mapa dice 11.27).
                                  #   Calibrada: 11.245-11.246 en 3 medidas. Hueco visto 0.774 m. Rumbo: el de la pared (la
                                  #   colocación a mano tenía ~1° de error; el bag de la ruta 3 dice pared casi paralela a Y)
+    reloc_duct_end_y: 11.14      # m: Y donde acaba la canaleta. Respaldo si no se ve el marco. POR CALIBRAR con cinta (6/11);
+                                 #   11.14 viene de la vista en vivo del 05/11
     reloc_door_width: 0.76       # m: ancho medido del hueco. Solo AVISO (la hoja abierta hacia la sala, con las bisagras en
                                  #   el borde lejano, tapa ese lado)
     reloc_door_width_tol: 0.06   # m
@@ -95,6 +97,21 @@ fase1_node:
     reloc_max_angle_deg: 3.0     # grados: corrección de rumbo máxima
     reloc_check_dist: 0.03       # m: al repetir el ajuste tras corregir, |dx| y |dy| deben quedar por debajo
     reloc_check_angle_deg: 0.5   # grados: ídem para el rumbo (si no, RELOC_INCONSISTENTE)
+
+    # ---------- Corrección continua con el mapa de distancias (ajuste_mapa) ----------
+    map_corr_mode: "apagado"     # "apagado", "sombra" (solo registra) o "activo". En el robot real lo fija real.yaml
+    map_corr_file: "maps/distancias_2cm.npy"   # relativo a share/autonomous_nav; lo genera scripts/generar_mapa_distancias.py
+    map_corr_every_scans: 5      # a 5 Hz, una corrección por segundo
+    map_corr_max_turn_rate: 0.08 # rad/s: girando más, el scan llega con retraso respecto a la pose
+    map_corr_y_max: 10.2         # m: con más Y, no corrige. Cerca de la puerta el mapa no basta: manda ajuste_puerta
+    map_corr_max_range: 3.4      # m
+    map_corr_window: 0.15        # m: solo puntos a menos de esto de una pared. Con 0.35 las mesas arrastran la pose (bags 05/11)
+    map_corr_sigma_range: 0.03   # m: error de un punto del LiDAR
+    map_corr_sigma_xy: 0.03      # m: confianza en la odometría en cada corrección
+    map_corr_sigma_angle_deg: 1.0
+    map_corr_max_step: 0.03      # m: corrección máxima por paso y eje
+    map_corr_max_angle_deg: 1.0  # grados: corrección máxima por paso
+    map_corr_min_points: 20
 
     # ---------- Log ----------
     log_file: "mission_log.csv"

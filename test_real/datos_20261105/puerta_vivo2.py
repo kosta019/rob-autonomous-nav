@@ -31,7 +31,7 @@ for k in range(rep):
     dx, dy, dth, nivel, motivo, d = ajuste(rr, ang, x, y, th)
     f = lambda v, e=3: '-' if v is None else f'{v:.{e}f}'
     print(f"{k+1}: {nivel or 'RECHAZADA'} {motivo}: dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}°  n {d['n']} rms {f(d['rms'] and d['rms']*100, 2)} cm  "
-          f"x_linea {f(d['x_linea'])}  y1 (marco) {f(d['y1'])}  y2 {f(d['y2'])}  ancho {f(d['ancho'])} aviso {d['aviso_ancho']}")
+          f"x_linea {f(d['x_linea'])}  y_fin (canaleta) {f(d['y_fin'])}  y1 (marco) {f(d['y1'])}  y2 {f(d['y2'])}  ancho {f(d['ancho'])} aviso {d['aviso_ancho']}")
     if nivel:
         nx, ny, nth = x + dx, (y + dy if nivel == 'total' else y), th + dth
         dx2, dy2, dth2, nivel2, motivo2, _ = ajuste(rr, ang, nx, ny, nth)
