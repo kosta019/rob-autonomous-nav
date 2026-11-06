@@ -6,4 +6,3 @@ fase1_node:
     initial_pose: [5.285, 2.517, 0.0]
     start_after: "D"
     plan_at_start: true
-    max_linear_speed: 0.12       # primera prueba entre paneles: despacio

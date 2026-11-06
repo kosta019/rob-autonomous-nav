@@ -284,3 +284,18 @@ salida. Implementado (sin probar en el robot): `start_after` ("B" para B y C, "D
 (pasando por D). Con el planificador real, C encerrado en un cuadrado de paneles de 1.2 m: hueco de 50 cm → sin camino;
 60-70 cm → camino con inflado 0.20; 80 cm → 0.25. **El robot necesita huecos de ≥ 0.6 m.**
 Uso: `-p initial_pose:="[x, y, th]" -p start_after:=B -p plan_at_start:=true` (o un yaml por salida).
+
+### Salidas probadas en el robot (16:48-16:57, bag `bag_fase1_20261106_164741`)
+
+- **C, 1.er intento (`mission_log_salida_C_bucle.csv`): BLOQUEO/REPLANIFICACION en bucle**, parado. Panel paralelo a la
+  izquierda a 0.19-0.22 m del LiDAR, a lo largo del camino a D: el robot arranca dentro del inflado, la simplificación
+  (que exige la holgura del camino desde el robot, casi 0) tiraba recto junto al panel y ruta_bloqueada lo veía
+  acercarse. **Arreglo: si sale de dentro del inflado, se aparta a la celda libre más cercana y se simplifica desde
+  ahí.** Con los obstáculos del log: antes bloqueaba; ahora (2.17, 2.31) y recto a 0.4 m del panel.
+- **C, 2.º (`mission_log_salida_C.csv`), 0.12 m/s: C → Q en 3:34.** PLAN_SALIDA (54 obstáculos), se aparta a
+  (2.34, 2.35), D, E, RELOC dy −0.441 Y=canaleta, Door, RELOC_Q −0.257/+0.200/−3.8° y ~2 cm, FASE I COMPLETADA.
+- **B (`mission_log_salida_B.csv`), 0.20 m/s: B → E** (parado tras E por tiempo). PLAN_SALIDA (95 obstáculos), D en 15 s,
+  E a 1.9 cm.
+- `comprobar_pose` en B y en C: **solo paredes del eje Y** (los paneles tapan la del fondo) → pose escrita a mano con la
+  X de la cruz y la Y y θ medidas (README_DEMO.md, 3.2). En C, ecos a < 0.20 m: el panel pegado.
+- `salida_{B,C,D}.yaml` sin límite de velocidad (0.20 de `real.yaml`). D sin probar.

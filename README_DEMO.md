@@ -3,7 +3,7 @@
 Todo lo que hay que hacer el día de la demo, desde un PC del laboratorio recién encendido. Probado el 06/11/2026 con
 BOT 11. Las pruebas, los datos y el porqué de cada parámetro están en `test_real/datos_20261106/NOTAS.md`.
 
-**Estado (06/11):** fase I completa y probada desde A (también desde C con paneles). Fase II: solo un **prototipo**
+**Estado (06/11):** fase I completa y probada desde A (2:49 a 0.20 m/s) y desde C (hasta Q) y B (hasta E) entre paneles. Fase II: solo un **prototipo**
 (recorre todo el pasillo y vuelve a P Base; todavía no detecta la estación). Fase III: **sin hacer**.
 
 ---
@@ -81,6 +81,8 @@ ros2 run autonomous_nav comprobar_pose $CFG/fase1.yaml $CFG/real.yaml $S --escri
   ```bash
   printf 'fase1_node:\n  ros__parameters:\n    initial_pose: [2.078, 2.544, 0.0263]\n' > initial_pose_corregida.yaml
   ```
+  En B pasa lo mismo (solo ve las paredes del eje Y). 06/11: `[3.102, 1.729, 0.0314]`. Cruces: B (3.102, 1.722),
+  C (2.078, 2.517), D (5.285, 2.517).
 - **Con AVISO de ecos a < 0.20 m:** si hay un panel pegado al robot es normal; si no, limpiar la ventana del LiDAR.
 
 ```bash
