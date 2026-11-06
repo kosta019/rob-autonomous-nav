@@ -838,6 +838,13 @@ class Fase1Node(Node):
                     nuevos = None
                     break
                 puntos = pl.simplificar(celdas, holgura, self.meta, self.simp_paso, self.simp_tope, self.simp_margen)
+                if p == (x, y) and len(celdas) > 2 and pl.holgura_en(holgura, self.meta, x, y) <= inflado:
+                    # Sale de dentro del inflado (06/11, en C con un panel a 0.2 m): primero apartarse a la celda libre
+                    # más cercana (celdas[1]) y simplificar desde ahí. Si se simplifica desde el robot, la holgura exigida
+                    # sale de la de la salida (casi 0), el atajo va recto junto al obstáculo y ruta_bloqueada, que ve
+                    # que la ruta se le acerca, bloquea en bucle.
+                    puntos = [celdas[0]] + pl.simplificar(celdas[1:], holgura, self.meta, self.simp_paso,
+                                                          self.simp_tope, self.simp_margen)
                 for m, (ix, iy) in enumerate(puntos[1:-1], start=1):
                     nuevos.append((f'replan{self.n_replan}_{m}', ix, iy, self.tol_waypoint))
                 nuevos.append((nombre, ox, oy, tol))
