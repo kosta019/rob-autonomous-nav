@@ -13,3 +13,4 @@ mission_log*.csv
 test_gazebo/resultados/
 bags/
 .pytest_cache/
+.pytest_cache/
