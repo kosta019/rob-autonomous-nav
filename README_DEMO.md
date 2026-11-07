@@ -166,6 +166,9 @@ encontrar la estación; la X en el pasillo solo la da la odometría (4-9 cm junt
 
 ## 5. Guardar el mapa del SLAM (al llegar a P Base, con el SLAM aún en marcha)
 
+Con la fase III encadenada (`phase3_enabled:=true`), el robot sigue solo tras `FASE II COMPLETADA`: guardar el mapa en
+ese momento (es el de las fases I y II, el que pide el enunciado) mientras empieza la fase III; el SLAM sigue en marcha.
+
 ```bash
 cd ~/ros2_ws/mapas && ros2 run nav2_map_server map_saver_cli -f mapa_demo --ros-args -p use_sim_time:=false
 ls ~/ros2_ws/mapas      # mapa_demo.pgm + mapa_demo.yaml: el entregable
