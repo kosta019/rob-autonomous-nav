@@ -146,9 +146,17 @@ ha visto una en 5 scans, el Mission Log y la terminal dicen dónde está:
 - seguidas de una fila por pata, con su posición en `obstacle_x/obstacle_y`: `PILAR` (de la cuadrada, la estación de
   carga del enunciado) o `PILAR_DESCARTADA` (de la triangular).
 
-La posición es la de la pose del robot en ese momento: hereda su error (en el pasillo, sin SLAM, ~10 cm).
+La posición es la de la pose del robot en ese momento: hereda su error (en el pasillo, ~5-10 cm, sobre todo en X).
+
+**Corrección en el pasillo (07/11, sin probar en el robot):** dentro de `corridor_corr_zone`, cada segundo y sin girar,
+la Y se corrige con la pared del extintor medida con cinta (Y 17.15, `corridor_wall_*` en `real.yaml`): eventos
+`CORR_PASILLO dx= dy= nx= ny=` (n = puntos de pared usados), como mucho 3 cm por paso. El 06/11 el robot llegó a P Base
+con ~15 cm de error hacia esa pared (sin corrección); con ella, en los bags, lo habría visto y corregido. Las paredes que
+se midan (p. ej. el extremo X −0.55) se añaden en `real.yaml`, sin tocar código. Para quitarla:
+`-p corridor_corr_mode:=apagado` (o `sombra`: solo la registra). Análisis: `docs/analisis_pasillo_20261107.md`.
+
 **Limitaciones:** con `prueba_pasillo.yaml` el log dice fase "I" (es otro lanzamiento de la fase I); la ruta no cambia al
-encontrar la estación; llega a P Base con ~15-20 cm de error (sin corrección en el pasillo).
+encontrar la estación; la X en el pasillo solo la da la odometría (4-9 cm junto a R en los bags).
 
 ## 5. Guardar el mapa del SLAM (al llegar a P Base, con el SLAM aún en marcha)
 

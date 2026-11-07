@@ -37,3 +37,13 @@ fase1_node:
     # a la de la derecha (-Y). El mapa dice 9.530 y 13.780: mal en Y (~0.22 m). El LiDAR desde Q ve 0.608 y ~0.49.
     reloc_q_wall_x: 9.570
     reloc_q_wall_y: 13.997
+    # Pasillo (07/11, bags del 06/11): la pose se corrige con la pared del extintor, medida con cinta en Y 17.15 desde Q, R
+    # y P Base (el mapa dice 16.90). Solo la Y: corregir el rumbo con ella lo movía 1-2° contra el de la esquina de Q (y el
+    # del IMU es bueno: -0.3° en 200 s), y el fondo (X 9.57 en Q) no es perpendicular: a 1.5 m de Q ya está a ~8 cm de 9.57.
+    # Resultado (scripts/evaluar_pasillo.py): R a la cinta 8.7/9.4/1.2 cm -> 7.3/9.5/1.5, y en P Base ve los ~15 cm que
+    # quedó de la cruz (LiDAR parado allí: 1.30 m a la pared; cinta: 1.45). Añadir aquí las que se midan (extremo X -0.55).
+    corridor_corr_mode: "activo"
+    corridor_wall_axis: ["y"]
+    corridor_wall_value: [17.15]
+    corridor_wall_from: [-0.55]
+    corridor_wall_to: [9.57]

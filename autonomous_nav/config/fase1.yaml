@@ -166,6 +166,17 @@ fase1_node:
     map_corr_max_angle_deg: 1.0  # grados: corrección máxima por paso
     map_corr_min_points: 20
 
+    # ---------- Corrección en el pasillo con sus paredes (ajuste_paredes): cadencia, ventana, sigmas y límites de map_corr_* ----------
+    corridor_corr_mode: "apagado"          # "apagado", "sombra" o "activo". En el robot real lo fija real.yaml
+    corridor_corr_zone: [-0.55, 9.57, 13.90, 17.15]   # [x_min, x_max, y_min, y_max]: con el robot aquí dentro se usa esta y no la del mapa
+    corridor_corr_max_range: 2.0           # m: más lejos, el LDS da las paredes con ±5 cm (bags del 06/11)
+    # Paredes: recta "y" = valor (corrige la Y) para x entre from y to, o "x" = valor (corrige la X) para y entre from y to.
+    # Aquí, las del MAPA (Gazebo); en el robot real, las medidas con cinta (real.yaml)
+    corridor_wall_axis: ["y"]
+    corridor_wall_value: [16.90]           # pared larga del pasillo (la del extintor)
+    corridor_wall_from: [-0.55]
+    corridor_wall_to: [9.53]
+
     # ---------- Log ----------
     log_file: "mission_log.csv"
     log_period: 0.5              # s entre filas periódicas

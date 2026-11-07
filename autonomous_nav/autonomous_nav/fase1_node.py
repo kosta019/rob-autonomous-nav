@@ -229,6 +229,35 @@ def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy,
     return dx, dy, dth, n
 
 
+def ajuste_paredes(px, py, paredes, ventana, sig_medida, sig_xy, min_puntos):
+    # Corrección de la pose en el pasillo con sus paredes medidas con cinta: la actualización del filtro de Kalman en 1D
+    # (Localization, diapositiva 9: se combinan dos estimaciones con incertidumbre, la de la odometría y la de la pared).
+    # px, py: puntos del LiDAR en el mundo con la pose creída. paredes: lista de (eje, valor, desde, hasta); eje 'y' es la
+    # recta y = valor para x entre desde y hasta (corrige la Y), y eje 'x', la recta x = valor para y entre desde y hasta
+    # (corrige la X). El rumbo no se toca: el del IMU es mejor que el de las paredes (bags del 06/11).
+    # Cada punto a menos de 'ventana' de una pared es una medida de cuánto se ha desplazado el robot: e = valor - punto.
+    # Con n medidas de varianza sig_medida² y la odometría (varianza sig_xy²):
+    #     d = (suma de e / sig_medida²) / (n / sig_medida² + 1 / sig_xy²)
+    # Devuelve (dx, dy, nx, ny): la corrección y los puntos de cada eje (con menos de min_puntos, esa corrección es 0).
+    suma = {'x': 0.0, 'y': 0.0}
+    n = {'x': 0, 'y': 0}
+    for eje, valor, desde, hasta in paredes:
+        if eje == 'y':
+            cerca, a_lo_largo = py, px
+        else:
+            cerca, a_lo_largo = px, py
+        sel = (np.abs(cerca - valor) < ventana) & (a_lo_largo >= desde) & (a_lo_largo <= hasta)
+        suma[eje] += float(np.sum(valor - cerca[sel]))
+        n[eje] += int(np.sum(sel))
+    d = {}
+    for eje in ('x', 'y'):
+        if n[eje] < min_puntos:
+            d[eje] = 0.0
+        else:
+            d[eje] = (suma[eje] / sig_medida ** 2) / (n[eje] / sig_medida ** 2 + 1.0 / sig_xy ** 2)
+    return d['x'], d['y'], n['x'], n['y']
+
+
 def quitar_hasta(objetivos, nombre):
     # La lista de objetivos sin los que van hasta 'nombre' inclusive (salida desde B, C o D). '' o un nombre que no está:
     # la lista entera.
@@ -404,6 +433,18 @@ class Fase1Node(Node):
         self.corr_max_xy = self.declare_parameter('map_corr_max_step', D).value
         self.corr_max_th = math.radians(self.declare_parameter('map_corr_max_angle_deg', D).value)
         self.corr_min_puntos = self.declare_parameter('map_corr_min_points', Parameter.Type.INTEGER).value
+        # Corrección en el pasillo con sus paredes medidas con cinta (ajuste_paredes), con el robot dentro de
+        # corridor_corr_zone. Modo como map_corr_mode; cadencia, ventana, sigmas y límites, los de map_corr_*.
+        self.pasillo_modo = self.declare_parameter('corridor_corr_mode', Parameter.Type.STRING).value
+        self.pasillo_zona = self.declare_parameter('corridor_corr_zone', DA).value   # [x_min, x_max, y_min, y_max]
+        self.pasillo_alcance = self.declare_parameter('corridor_corr_max_range', D).value
+        ejes = self.declare_parameter('corridor_wall_axis', SA).value
+        valores = self.declare_parameter('corridor_wall_value', DA).value
+        desde = self.declare_parameter('corridor_wall_from', DA).value
+        hasta = self.declare_parameter('corridor_wall_to', DA).value
+        if not (len(ejes) == len(valores) == len(desde) == len(hasta)) or any(e not in ('x', 'y') for e in ejes):
+            raise ValueError('corridor_wall_*: misma longitud, y cada eje "x" o "y"')
+        self.pasillo_paredes = list(zip(ejes, valores, desde, hasta))
         self.usar_imu = self.declare_parameter('use_imu_yaw', Parameter.Type.BOOL).value
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
         self.log_period = self.declare_parameter('log_period', D).value
@@ -964,15 +1005,21 @@ class Fase1Node(Node):
     def corregir_con_mapa(self, x, y, th):
         # Cada map_corr_every_scans scans nuevos: si el robot casi no gira (la lectura llega con retraso respecto a la
         # pose) y aún no está en el tramo de la puerta (allí corrige ajuste_puerta), se compara el scan con el mapa.
+        # Dentro de corridor_corr_zone (el pasillo), con las paredes medidas con cinta (corregir_con_paredes).
         # Modo "activo": aplica la corrección, limitada por paso. Modo "sombra": solo la escribe en el log.
         # Devuelve la pose con la que seguir este ciclo.
         msg = self.scan
-        if self.corr_modo == 'apagado' or msg is self.corr_ultimo_scan:
+        if (self.corr_modo == 'apagado' and self.pasillo_modo == 'apagado') or msg is self.corr_ultimo_scan:
             return x, y, th
         self.corr_ultimo_scan = msg
         self.corr_cuenta += 1
-        if (self.corr_cuenta % self.corr_cada != 0 or abs(self.w_anterior) > self.corr_max_w or y > self.corr_y_max
+        if (self.corr_cuenta % self.corr_cada != 0 or abs(self.w_anterior) > self.corr_max_w
                 or self.estado not in ('GIRAR', 'AVANZAR', 'ESPERAR')):
+            return x, y, th
+        x0, x1, y0, y1 = self.pasillo_zona
+        if x0 <= x <= x1 and y0 <= y <= y1:
+            return self.corregir_con_paredes(x, y, th)
+        if self.corr_modo == 'apagado' or y > self.corr_y_max:
             return x, y, th
         r = np.array(msg.ranges, dtype=float)
         a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
@@ -994,6 +1041,34 @@ class Fase1Node(Node):
         self.fijar_pose(nx, ny, nth)
         self.escribir_log(nx, ny, nth, f'CORR_MAPA {texto}', math.hypot(dx, dy))
         return nx, ny, nth
+
+    def corregir_con_paredes(self, x, y, th):
+        # En el pasillo: las paredes medidas con cinta (ajuste_paredes) en vez del mapa, que allí está mal (~0.3 m en Y).
+        # Solo los puntos a menos de corridor_corr_max_range: más lejos, el LDS da paredes con ±5 cm (bags del 06/11).
+        if self.pasillo_modo == 'apagado':
+            return x, y, th
+        msg = self.scan
+        r = np.array(msg.ranges, dtype=float)
+        a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+        ok = (np.isfinite(r) & (r >= max(msg.range_min, self.alcance_min_obstaculos))
+              & (r <= min(msg.range_max, self.pasillo_alcance)))
+        ok[1::2] = False                # con uno de cada dos rayos basta
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+        px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
+        py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
+        dx, dy, nx, ny = ajuste_paredes(px, py, self.pasillo_paredes, self.corr_ventana, self.corr_sig_medida,
+                                        self.corr_sig_xy, self.corr_min_puntos)
+        if nx < self.corr_min_puntos and ny < self.corr_min_puntos:
+            return x, y, th
+        texto = f'dx={dx:+.3f} dy={dy:+.3f} nx={nx} ny={ny}'
+        if self.pasillo_modo != 'activo':
+            self.escribir_log(x, y, th, f'CORR_PASILLO_SOMBRA {texto}', math.hypot(dx, dy))
+            return x, y, th
+        x2, y2 = x + limitar(dx, self.corr_max_xy), y + limitar(dy, self.corr_max_xy)
+        self.fijar_pose(x2, y2, th)
+        self.escribir_log(x2, y2, th, f'CORR_PASILLO {texto}', math.hypot(dx, dy))
+        return x2, y2, th
 
     # ---------- Relocalización con las paredes ----------
 

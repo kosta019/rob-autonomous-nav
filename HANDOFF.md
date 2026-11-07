@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **96 passed, 1 xfailed**.
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **126 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -64,10 +64,12 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   debe corregirlo solo al arrancar, parado, con el LiDAR contra las paredes (lo que hoy hace a mano
   `comprobar_pose --escribir`), antes de moverse.
 - **Confirmado por el usuario (07/11), a hacer antes del lunes, en este orden:**
-  1. Localización en el pasillo con sus paredes medidas: `ajuste_mapa` también en el pasillo, con el mapa de
-     distancias corregido con la cinta (extintor Y 17.15, pared de Q 13.997, fondo X 9.57). Comprobar con los bags
-     (R junto a la cinta, P Base junto a su cruz) antes de conectarlo; si no mejora, no conectarlo y avisar. El lunes
-     se miden la parte ancha (Y 13.00, X 1.32-5.18) y el extremo X −0.55.
+  1. **HECHO (07/11, sin probar en el robot):** localización en el pasillo con sus paredes medidas. No con
+     `ajuste_mapa` (con fondo y pared de Q empeoraba): `ajuste_paredes` corrige solo la Y con la pared del extintor
+     (Y 17.15, puntos a ≤ 2 m), activa en `real.yaml` (`corridor_*`), eventos `CORR_PASILLO`. En los bags: R igual
+     (±0.3 cm) y en P Base habría corregido los ~15 cm. Detalle y medidas para el lunes (predicción: de la cruz de
+     P Base a la pared del tramo ancho ≈ 2.41 m; el extremo X −0.55) en `docs/analisis_pasillo_20261107.md`. Las
+     paredes que se midan se añaden en `real.yaml` (`corridor_wall_*`), sin tocar código.
   2. Rumbo inicial automático al arrancar, parado (lo de `comprobar_pose --escribir`), antes de moverse.
   3. Nodo que reenvía /scan a /scan_slam con el sello −0.1 s, para slam_toolbox (mapa entregable). Comprobar que el
      mapa muestra las patas de la estación (el enunciado lo pide: "charging station pillars").
@@ -108,7 +110,8 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
    R y T, ninguna estación falsa. Las pasadas largas sitúan R a ~10 cm (deriva de la pose: lo arregla el SLAM).
    Herramientas sin ROS en el portátil: `scripts/leer_mcap.py`, `scripts/pilares_bag.py`; con Docker: `docker/tests.sh`
    (todos los tests) y `docker/reproducir_bag.sh` (el nodo con un bag grabado).
-2. **Localización con SLAM en el pasillo: ANALIZADO, NO CONECTADO** (`docs/analisis_slam_20261106.md`). Pasando
+2. **Localización con SLAM en el pasillo: ANALIZADO, NO CONECTADO** (`docs/analisis_slam_20261106.md`). En su lugar,
+   la pared del extintor (`ajuste_paredes`, 07/11: ver el punto 1 de las decisiones confirmadas). Pasando
    slam_toolbox otra vez por el bag de las 16:31 con varias configuraciones, su pose sitúa R a 0.39-0.83 m de la cinta;
    la del nodo, a 0.08. El scan llega ~0.1 s tarde (resellarlo mejora el SLAM, pero no basta). Pendiente de decidir
    (usuario): corregir la pose en el pasillo con sus paredes medidas (como `ajuste_mapa` en la sala) en vez del SLAM.
