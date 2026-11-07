@@ -196,8 +196,14 @@ def analizar_mision(d, mapa_ocupado, sim):
     r['f3_sin_estacion'] = hay('FASE_III_SIN_ESTACION') or hay('FASE_III_SIN_HUECO')
     r['f3_fuera_tolerancia'] = hay('APARCADO_FUERA_DE_TOLERANCIA')
 
+    # Fallo de la simulación, no del robot: la física de una persona revienta (pose de miles de km) y Gazebo se congela
+    datos_sim = np.loadtxt(os.path.join(d, 'real.csv'), delimiter=',', skiprows=1, ndmin=2)
+    r['fallo_sim'] = datos_sim.shape[1] > 4 and bool(np.nanmax(np.abs(datos_sim[:, 4:])) > 100)
+
     # Motivo del fallo
     motivos = []
+    if r['fallo_sim']:
+        motivos.append('SIMULACION: persona fuera de control (no es fallo del robot)')
     if r['choque']:
         motivos.append(f"choque con {r['min_hueco_con']} ({r['min_hueco_m']:.3f} m)")
     if r['contacto_persona_robot_movil']:

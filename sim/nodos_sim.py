@@ -26,6 +26,7 @@ class NodosSim(Node):
         self.objetivo = [1] * len(self.personas)
         self.espera = [None] * len(self.personas)
         self.parado = [None] * len(self.personas)
+        self.descontrol = [False] * len(self.personas)
         self.parar_a = esc.get('parar_a', 0.45)
         self.parar_s = esc.get('parar_s', 3.0)
         self.t0 = None
@@ -60,8 +61,20 @@ class NodosSim(Node):
         self.fichero.flush()
 
     def mover(self, k, pe, pos, t, robot):
-        cmd = Twist()
-        cmd.linear.z = 2.0 * (pe['alto'] / 2 - pos.z)         # sin gravedad: se mantiene a su altura
+        cmd = Twist()                                         # giro siempre a cero: no puede volcar ni girar
+        # Fuera de control (2 de 300 misiones: un roce la desestabilizaba y la física de Gazebo reventaba): si se sale
+        # más de 1 m de su recorrido o la pose no es un número, se queda quieta para siempre
+        ax, ay = pe['extremo_a']
+        bx, by = pe['extremo_b']
+        ux, uy = bx - ax, by - ay
+        largo = math.hypot(ux, uy) or 1.0
+        fuera = abs((pos.x - ax) * uy - (pos.y - ay) * ux) / largo
+        if self.descontrol[k] or not all(math.isfinite(v) for v in (pos.x, pos.y, pos.z)) or fuera > 1.0:
+            if not self.descontrol[k]:
+                self.get_logger().warn(f'persona_{k} fuera de su recorrido ({fuera:.2f} m): la paro')
+                self.descontrol[k] = True
+            return self.pubs[k].publish(cmd)
+        cmd.linear.z = max(-0.3, min(0.3, 2.0 * (pe['alto'] / 2 - pos.z)))   # sin gravedad: se mantiene a su altura
         if t - self.t0 >= pe['arranque']:
             if self.espera[k] is not None and t < self.espera[k]:
                 pass                                          # pausa en el extremo
@@ -85,7 +98,7 @@ class NodosSim(Node):
                     self.objetivo[k] = 1 - self.objetivo[k]
                     self.espera[k] = t + pe['pausa']
                 else:
-                    v = min(pe['velocidad'], d / 0.2)          # frena al llegar
+                    v = min(pe['velocidad'], d / 0.2, 1.2)     # frena al llegar
                     cmd.linear.x = v * (ox - pos.x) / d
                     cmd.linear.y = v * (oy - pos.y) / d
         self.pubs[k].publish(cmd)
