@@ -79,6 +79,18 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 - **Descartado: acortar la fase II al encontrar R.** El enunciado: "Once the Corridor area is completely explored and
   the station is identified, the robot has to return to Punt Base", y el mapa debe salir "during the completion of the
   first two phases". Hay que explorar el pasillo entero, y el mapa entregable sale de esa misma ejecución.
+- **Revisión contra el enunciado (07/11)**, a tener en cuenta:
+  - *"without external assistance throughout all stages"*: la fase III debe seguir sola tras la II en el mismo
+    lanzamiento (como la I→II), con `current_phase` = III. Y el rumbo inicial automático quita el paso manual de
+    `comprobar_pose`.
+  - *"completely explored and the station is identified"*: si al acabar la cobertura no se ha confirmado la cuadrada,
+    hoy va igual a P Base y da la fase II por completada. Decidir qué hacer (p. ej. otra pasada a otra Y, o registrarlo).
+  - El mapa entregable debe mostrar las patas de la estación (comprobar con el nodo del scan resellado).
+  - Mission Log: pide obstáculos "within the passadis area"; hoy `OBSTACULO` se registra en toda la misión (con
+    `current_phase`, se puede filtrar en el informe). Las patas de la cuadrada son `PILAR`; las de la triangular,
+    `PILAR_DESCARTADA` (cambiado el 07/11).
+  - Fase III frente a *"conservative clearance buffer"*: entrar a ~10 cm de las patas es la propia maniobra que pide el
+    enunciado; justificarlo en el informe (velocidad baja, pose relativa a las patas, parada si algo inesperado).
 - Plan del lunes: 0:00 preparar PC/robot · 0:20 medir pasillo · 0:40 ensayo misión completa (bag + SLAM) · 1:30 fase III
   · 2:15 vídeo definitivo · 3:15 guardar todo. Prioridad: vídeo de fases I+II antes que la fase III.
 - Preguntas al profesor (el lunes al llegar): slam_toolbox, pose final de la fase I y su θ, si se mueven estaciones y

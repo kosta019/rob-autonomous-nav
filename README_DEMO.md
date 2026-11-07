@@ -143,7 +143,8 @@ Las estaciones y los obstáculos se esquivan; las patas quedan como `OBSTACULO` 
 ha visto una en 5 scans, el Mission Log y la terminal dicen dónde está:
 - `ESTACION_CUADRADA` (la buena) o `ESTACION_TRIANGULAR` (la que hay que descartar): centro en `obstacle_x/obstacle_y`,
   y ángulo de la estación (grados) en `error`;
-- seguidas de una fila `PILAR` por pata, con su posición en `obstacle_x/obstacle_y`.
+- seguidas de una fila por pata, con su posición en `obstacle_x/obstacle_y`: `PILAR` (de la cuadrada, la estación de
+  carga del enunciado) o `PILAR_DESCARTADA` (de la triangular).
 
 La posición es la de la pose del robot en ese momento: hereda su error (en el pasillo, sin SLAM, ~10 cm).
 **Limitaciones:** con `prueba_pasillo.yaml` el log dice fase "I" (es otro lanzamiento de la fase I); la ruta no cambia al

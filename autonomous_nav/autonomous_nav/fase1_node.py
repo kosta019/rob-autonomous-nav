@@ -755,12 +755,13 @@ class Fase1Node(Node):
         e.update(tipo=tipo, x=cx, y=cy, ang=ang, patas=patas)
         e['vistas'] += 1
         # Al Mission Log, una vez, cuando ya se ha visto en station_confirm_scans scans: el centro (con el ángulo de la
-        # estación en grados en la columna error) y cada pata
+        # estación en grados en la columna error) y cada pata. Las de la triangular, como PILAR_DESCARTADA: la estación
+        # de carga del enunciado es solo la cuadrada
         if e['vistas'] == self.estacion_confirmar:
             self.get_logger().info(f'Estación {tipo} en ({cx:.2f}, {cy:.2f}), {math.degrees(ang):.1f}°')
             self.escribir_log(x, y, th, 'ESTACION_' + tipo.upper(), math.degrees(ang), cx, cy)
             for px, py in patas:
-                self.escribir_log(x, y, th, 'PILAR', None, px, py)
+                self.escribir_log(x, y, th, 'PILAR' if tipo == 'cuadrada' else 'PILAR_DESCARTADA', None, px, py)
 
     def ruta_bloqueada(self, x, y, extra=0.0):
         # Obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m).

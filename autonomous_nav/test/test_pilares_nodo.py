@@ -73,4 +73,5 @@ def test_girando_deprisa_no_detecta():
 def test_T_triangular_al_log():
     n, log = nodo_falso()
     pasar(n, 'T_rodeo')
-    assert [ev for ev, *_ in log] == ['ESTACION_TRIANGULAR'] + ['PILAR'] * 3
+    # Sus patas no son las de la estación de carga (la del enunciado es la cuadrada)
+    assert [ev for ev, *_ in log] == ['ESTACION_TRIANGULAR'] + ['PILAR_DESCARTADA'] * 3
