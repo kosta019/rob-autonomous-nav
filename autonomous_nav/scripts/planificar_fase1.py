@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-# Paso 2 (OFFLINE, en el portátil): planifica la ruta de la fase I sobre el mapa.
-# Usa Pillow, scipy y matplotlib, que NO están permitidos en los nodos; por eso los ficheros que genera
-# se suben al repo y el robot no necesita ejecutar este script.
-#
-# Uso (desde cualquier carpeta):  python3 autonomous_nav/scripts/planificar_fase1.py
+# Script offline (en el portátil): planifica la ruta de la fase I sobre el mapa.
+# Usa Pillow, scipy y matplotlib, que no se usan en los nodos; los ficheros que genera se suben al repositorio.
+# Uso: python3 autonomous_nav/scripts/planificar_fase1.py
 # Lee config/fase1.yaml y genera:
 #   - config/fase1_ruta.yaml         waypoints para fase1_node (se pasa como segundo --params-file)
-#   - maps/holgura_5cm.npy + .yaml   holgura estática de la rejilla de 5 cm, para el paso 3
+#   - maps/holgura_5cm.npy + .yaml   holgura estática de la rejilla de 5 cm, para detectar obstáculos nuevos
 #   - ../docs/ruta_fase1_plan.png    figura de la ruta para el informe
 import math
 import os
@@ -30,7 +28,7 @@ def cargar_parametros():
 
 
 def mapa_ocupacion(p, con_zonas=True):
-    # Mapa de 1 cm: True = ocupado. Sin las motas sueltas y (si con_zonas) con las zonas prohibidas pintadas.
+    # Mapa de 1 cm (True = ocupado) sin las motas sueltas y, si con_zonas, con las zonas prohibidas pintadas.
     imagen = np.array(Image.open(os.path.join(RAIZ, p['map_image'])).convert('L'))
     ocupado = imagen < 128
     for fila, col in zip(p['map_remove_rows'], p['map_remove_cols']):
@@ -66,8 +64,8 @@ def calcular_holguras(p):
 
 
 def planificar(p, h1, meta1, h5, meta5, secuencia, inflado):
-    # secuencia: lista de (nombre, x, y). Devuelve una lista de tramos:
-    # (nombre_a, nombre_b, puntos simplificados, longitud, holgura mínima, segundos), o None si un tramo no tiene camino.
+    # secuencia: lista de (nombre, x, y). Devuelve los tramos como (nombre_a, nombre_b, puntos simplificados, longitud,
+    # holgura mínima, segundos), o None si un tramo no tiene camino.
     coste = pl.mapa_de_costes(h5, inflado, p['clearance_target'], p['clearance_cost_gain'])
     tramos = []
     for (na, xa, ya), (nb, xb, yb) in zip(secuencia, secuencia[1:]):
@@ -89,7 +87,8 @@ def secuencia_fase1(p):
     secuencia = [(n, puntos[n][0], puntos[n][1]) for n in p['planning_sequence']]
     xi, yi = p['initial_pose'][0], p['initial_pose'][1]
     if math.hypot(xi - secuencia[0][1], yi - secuencia[0][2]) > 0.05:
-        print(f'AVISO: initial_pose ({xi}, {yi}) no coincide con {secuencia[0][0]}, el primer punto de planning_sequence')
+        print(f'AVISO: initial_pose ({xi}, {yi}) no coincide con {secuencia[0][0]}, '
+              f'el primer punto de planning_sequence')
     xf, yf = p['final_pose'][0], p['final_pose'][1]
     if math.hypot(xf - secuencia[-1][1], yf - secuencia[-1][2]) > p['tol_mandatory']:
         secuencia.append(('final', xf, yf))
@@ -155,7 +154,8 @@ def dibujar(ruta_png, h5, meta1, meta5, p, tramos, inflado):
     ax.imshow(np.ma.masked_where(h5 > inflado, h5 <= inflado), cmap=ListedColormap(['#d9d9d9']), extent=ext5)
     ax.imshow(np.ma.masked_where(~ocupado, ocupado), cmap=ListedColormap(['#444444']), extent=ext1)
     for x0, x1, y0, y1 in zip(p['nogo_x_min'], p['nogo_x_max'], p['nogo_y_min'], p['nogo_y_max']):
-        ax.add_patch(Rectangle((y0, x0), y1 - y0, x1 - x0, facecolor='#f5c98b', edgecolor='#c98a2e', hatch='xx', alpha=0.8))
+        ax.add_patch(Rectangle((y0, x0), y1 - y0, x1 - x0, facecolor='#f5c98b', edgecolor='#c98a2e',
+                               hatch='xx', alpha=0.8))
     for na, nb, puntos, _, _, _ in tramos:
         ax.plot([q[1] for q in puntos], [q[0] for q in puntos], '-', color='tab:blue', lw=2)
         ax.plot([q[1] for q in puntos[1:-1]], [q[0] for q in puntos[1:-1]], 'o', color='tab:blue', ms=5)

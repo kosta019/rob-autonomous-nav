@@ -1,9 +1,7 @@
-# Offline (scipy): genera maps/distancias_2cm.npy y .yaml para la corrección con el mapa de fase1_node.
-# Para cada punto del plano: distancia a la pared visible más cercana y su gradiente (la normal de la pared).
-# Las paredes salen de maps/paredes.yaml, con las caras que ve el LiDAR (canaleta incluida).
-# Solo cuenta como pared el borde que toca el espacio libre de la sala: el interior de una zona negra no da puntos
-# "falsamente buenos", y lo que cruza una pared sigue teniendo distancia y empuja de vuelta.
-# Uso (desde autonomous_nav/):  python3 scripts/generar_mapa_distancias.py
+# Script offline (scipy): genera maps/distancias_2cm.npy y .yaml, que usa fase1_node para corregir la pose con el mapa.
+# Para cada punto del plano guarda la distancia a la pared visible más cercana y su gradiente (la normal de la pared).
+# Las paredes salen de maps/paredes.yaml. Solo cuenta como pared el borde que toca el espacio libre de la sala.
+# Uso (desde autonomous_nav/): python3 scripts/generar_mapa_distancias.py
 import numpy as np
 import yaml
 from scipy.ndimage import binary_dilation, distance_transform_edt, gaussian_filter, label
@@ -22,9 +20,10 @@ cols = int(np.ceil((max(p['y_max']) + MARGEN - y0) / RES))
 
 ocupado = np.zeros((filas, cols), dtype=bool)
 for a, b, e, f in zip(p['x_min'], p['x_max'], p['y_min'], p['y_max']):
-    ocupado[int(round((a - x0) / RES)):int(round((b - x0) / RES)), int(round((e - y0) / RES)):int(round((f - y0) / RES))] = True
+    ocupado[int(round((a - x0) / RES)):int(round((b - x0) / RES)),
+            int(round((e - y0) / RES)):int(round((f - y0) / RES))] = True
 
-# Espacio libre conectado con la salida A: lo que el robot puede ver
+# Espacio libre conectado con el punto A: lo que el robot puede ver
 etiquetas, _ = label(~ocupado)
 i = c['point_names'].index('A')
 libre = etiquetas == etiquetas[int((c['point_x'][i] - x0) / RES), int((c['point_y'][i] - y0) / RES)]

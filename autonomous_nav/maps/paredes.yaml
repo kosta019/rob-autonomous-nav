@@ -1,9 +1,7 @@
-# GENERADO por scripts/generar_mundo_lab.py (no editar a mano).
-# Rectángulos ocupados del mapa a 1 cm, en coordenadas del enunciado (metros).
-# Sin zonas prohibidas, que el LiDAR no ve. Cuatro listas paralelas.
-# EDITADO A MANO (05/11/2026): canaleta de cables de 4 cm en la pared del fondo (índice 8: x_max 0 -> 0.04)
-# y en la izquierda (índices 10, 11, 13: y_max -> 0.04). El LiDAR (a ~18 cm del suelo) ve la canaleta, no el yeso.
-# Si se regenera con generar_mundo_lab.py, hay que volver a aplicar este cambio.
+# Rectángulos ocupados del mapa a 1 cm, en coordenadas del enunciado (metros), como cuatro listas paralelas.
+# Salen de scripts/generar_mundo_lab.py, con un retoque a mano: la canaleta de cables de 4 cm en la pared del fondo
+# (índice 8, x_max 0.04) y en la izquierda (índices 10, 11 y 13, y_max 0.04): el LiDAR ve la canaleta y no el yeso.
+# Si se regenera, hay que volver a aplicar ese cambio. No incluye las zonas prohibidas, que el LiDAR no ve.
 x_min: [-0.710, -0.660, -0.660, -0.650, -0.650, -0.640, -0.560, -0.550, -0.010, -0.010, 0.000, 0.120, 0.000, 0.150, 1.320, 5.850, 3.930, 5.180, 5.860, 6.340, 6.340, 6.350, 6.350, 6.350, 6.380, 6.360, 6.390, 6.390, 6.390, 8.480, 8.720, -0.560, -0.550, 9.530, 9.720, 9.720, 9.730, 9.820, 9.880, 9.880, 9.890]
 x_max: [-0.660, -0.650, -0.650, -0.640, -0.640, -0.560, -0.550, -0.010, 0.040, 0.000, 0.120, 0.150, 1.320, 3.930, 5.180, 5.860, 5.860, 6.340, 6.350, 6.350, 6.350, 6.360, 6.360, 6.380, 6.390, 6.390, 6.400, 6.840, 8.720, 8.720, 9.530, 9.530, 9.530, 9.720, 9.730, 9.730, 9.820, 9.880, 9.890, 9.890, 9.940]
 y_min: [-0.020, 12.700, -0.020, 12.180, -0.020, -0.020, -0.020, -0.020, -0.020, 9.880, -0.020, -0.020, 12.650, -0.020, 12.650, 6.800, -0.020, 12.370, -0.020, 12.030, 10.510, 9.890, -0.020, 12.020, 12.030, -0.020, 12.040, 12.650, -0.020, 12.980, -0.020, 16.920, 16.900, -0.020, -0.020, 3.020, -0.020, -0.010, 16.020, -0.010, 0.150]

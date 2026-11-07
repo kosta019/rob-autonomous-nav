@@ -1,0 +1,7 @@
+# Salida desde B: el robot parte sobre la cruz de B mirando a +X. Se pasa como último --params-file.
+# Con plan_at_start, el robot parado mira alrededor y planifica desde aquí. El nodo corrige la pose al arrancar.
+fase1_node:
+  ros__parameters:
+    initial_pose: [3.102, 1.722, 0.0]
+    start_after: "B"
+    plan_at_start: true

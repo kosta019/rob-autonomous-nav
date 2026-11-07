@@ -30,7 +30,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 - `planificador.py`: Distance Transform con costes (Dijkstra desde el objetivo). Offline (`scripts/planificar_fase1.py`
   genera `config/fase1_ruta.yaml`, `maps/holgura_5cm.*`, `docs/ruta_fase1_plan.png`) y online (replan con obstáculos).
 - Configuración: `config/fase1.yaml` (valores por defecto, Gazebo), `config/fase1_ruta.yaml` (GENERADO, no editar),
-  `config/real.yaml` (robot real), y en `test_real/`: `salida_{B,C,D}.yaml`, `prueba_pasillo.yaml`,
+  `config/real.yaml` (robot real), `config/salida_{B,C,D}.yaml` y en `test_real/`: `prueba_pasillo.yaml`,
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).

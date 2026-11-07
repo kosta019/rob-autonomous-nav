@@ -14,7 +14,7 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
-  <!-- Solo para la simulación (launch/laboratorio.launch.py) -->
+  <!-- Para los launch (SLAM y simulación) -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>

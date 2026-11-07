@@ -1,8 +1,7 @@
-# Fase I: seguir la lista de waypoints con parada de emergencia y Mission Log (paso 1), y
-# detectar obstáculos nuevos con el LiDAR y replanificar alrededor de ellos (paso 3).
-# Misma estructura que ref/go_stop.py: una clase Node, publicadores y suscriptores en __init__,
-# callbacks y main(). La diferencia: el control va en un timer a ritmo fijo (así se detecta
-# si un sensor deja de llegar) y no en los callbacks.
+# Nodo de la misión: sigue la lista de waypoints con parada de emergencia y Mission Log, detecta obstáculos y
+# pilares con el LiDAR y replanifica alrededor de ellos (fases I, II y III).
+# Sigue la estructura de la plantilla go_stop.py: una clase Node, publicadores y suscriptores en __init__,
+# callbacks y main(). El control va en un timer a ritmo fijo, para detectar si un sensor deja de llegar.
 import csv
 import math
 import os
@@ -25,7 +24,7 @@ from autonomous_nav import comprobar_pose as cp
 from autonomous_nav import pilares as pil
 from autonomous_nav import planificador as pl
 
-BLOQUEO_ACERCARSE = 0.005   # m: dentro del inflado, la ruta bloquea si se acerca al obstáculo más que esto (ruta_bloqueada)
+BLOQUEO_ACERCARSE = 0.005   # m: dentro del inflado, la ruta bloquea si se acerca al obstáculo más que esto
 
 
 def normalizar(a):
@@ -34,7 +33,7 @@ def normalizar(a):
 
 
 def yaw_de_cuaternion(q):
-    # Yaw sin tf_transformations (en Jazzy da problemas)
+    # Yaw a partir del cuaternión, sin tf_transformations
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
 
@@ -43,10 +42,9 @@ def limitar(valor, maximo):
 
 
 def rayos_libres(rayos, d, margen, dist_min_cero):
-    # ¿Dicen los rayos que apuntan a un obstáculo recordado (a distancia d del LiDAR) que ya no está?
-    # Un rayo es "libre" si da inf, una distancia mayor que d + margen, o 0.0 con el obstáculo lejos.
-    # El LDS real da 0.0 cuando el rayo no choca con nada hasta range_max (Gazebo da inf), pero también
-    # cuando algo está más cerca que range_min: por eso un 0.0 solo vale si d > dist_min_cero.
+    # Dice si los rayos que apuntan a un obstáculo recordado (a distancia d del LiDAR) lo ven libre.
+    # Un rayo es libre si da inf, una distancia mayor que d + margen, o 0.0 con el obstáculo lejos. El LiDAR real da
+    # 0.0 también cuando algo está más cerca que range_min, por eso un 0.0 solo vale si d > dist_min_cero.
     for r in rayos:
         if r == math.inf or (math.isfinite(r) and r > d + margen) or (r == 0.0 and d > dist_min_cero):
             continue
@@ -55,8 +53,8 @@ def rayos_libres(rayos, d, margen, dist_min_cero):
 
 
 def punto_sustituto(holgura, meta, ox, oy, inflado, radio):
-    # Punto obligatorio (ox, oy) tapado por un obstáculo: la celda libre (holgura > inflado) más cercana a él, a menos
-    # de 'radio'. Devuelve su centro (x, y) o None si no hay ninguna.
+    # Para un obligatorio (ox, oy) tapado, busca la celda libre (holgura > inflado) más cercana a menos de 'radio'.
+    # Devuelve su centro (x, y) o None si no hay ninguna.
     res = meta['resolucion']
     i0, j0 = pl.mundo_a_celda(ox, oy, meta)
     r = int(math.ceil(radio / res))
@@ -72,15 +70,12 @@ def punto_sustituto(holgura, meta, ox, oy, inflado, radio):
 
 def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, largo, max_rms, min_puntos,
                   min_cercano, max_dx, max_dy, max_ang, fondo_marco, y_fin_canaleta=None):
-    # Relocalización con la pared de la puerta (lado sala), con el robot parado. px, py: puntos del scan pasados al
-    # mundo con la pose CREÍDA; (rx, ry): posición creída del robot. Referencias CALIBRADAS con el robot en una pose
-    # medida con cinta: x_pared = X a la que el LiDAR ve la pared (la canaleta) e y_borde = Y del lateral del marco
-    # del borde cercano del hueco.
-    # 1. Rumbo y X: recta x = a + b*y con el tramo de pared cercano (la hoja de la puerta, en el lado lejano, no entra).
-    # 2. Y: el lateral del marco (puntos detrás de la recta justo donde se acaba la pared). El ancho es solo un aviso.
-    #    Si desde aquí no se ve el marco, la Y sale del final de la canaleta (y_fin_canaleta): motivo 'canaleta'.
-    # Devuelve (dx, dy, dth, nivel, motivo, datos): la corrección a sumar a la pose creída; nivel 'total' (dx, dy,
-    # dth), 'parcial' (solo dx y dth: la Y no es fiable) o '' (nada: la recta no es fiable); motivo; y lo medido.
+    # Relocalización con la pared de la puerta, con el robot parado. px, py son los puntos del scan en el mundo con la
+    # pose creída y (rx, ry) la posición creída. x_pared e y_borde son referencias calibradas con cinta: la X a la que
+    # el LiDAR ve la pared (la canaleta) y la Y del lateral del marco. El rumbo y la X salen de la recta de la pared;
+    # la Y, del marco (o del final de la canaleta si no se ve). El ancho del hueco es solo un aviso.
+    # Devuelve (dx, dy, dth, nivel, motivo, datos), con la corrección a sumar a la pose creída. El nivel es 'total',
+    # 'parcial' (sin la Y, que no es fiable) o '' (la recta no es fiable).
     datos = {'n': 0, 'rms': None, 'x_linea': None, 'y1': None, 'y2': None, 'ancho': None, 'aviso_ancho': False,
              'y_fin': None}
     en_banda = np.abs(px - x_pared) < banda
@@ -91,9 +86,9 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         return 0.0, 0.0, 0.0, '', 'pocos_puntos', datos
 
     def mejor_recta(qx, qy):
-        # Punto de partida robusto: de todas las rectas x = a + b*y que pasan por dos puntos separados más de 0.3 m en y
-        # (y con menos de 6° de pendiente), la que tiene más puntos a < 2 cm. Es la canaleta: lo que más puntos tiene
-        # alineados. (Un ajuste por mínimos cuadrados con todo saldría torcido por el escalón de yeso y el marco.)
+        # Entre las rectas x = a + b*y que pasan por dos puntos separados más de 0.3 m en y (y con menos de 6° de
+        # pendiente), elige la que tiene más puntos a menos de 2 cm: la canaleta. Un ajuste de mínimos cuadrados con
+        # todos los puntos saldría torcido por el escalón de yeso y el marco.
         mejor = (0, 0.0, 0.0)
         for i in range(len(qy)):
             for j in range(i + 1, len(qy)):
@@ -109,8 +104,8 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         return mejor
 
     def tramo_mas_largo(qx, qy, a, b):
-        # Puntos a < 2 cm de la recta x = a + b*y, y de ellos el tramo continuo (sin saltos de más de 10 cm en y) más
-        # largo: la canaleta. Así no entran el escalón de yeso del final, el marco ni algo que haya en el hueco.
+        # Puntos a menos de 2 cm de la recta y, de ellos, el tramo continuo más largo (sin saltos de más de 10 cm en y).
+        # Así no entran el escalón de yeso, el marco ni algo que haya en el hueco.
         cerca = np.abs(qx - (a + b * qy)) < 0.02
         cx, cy = qx[cerca], qy[cerca]
         orden = np.argsort(cy)
@@ -123,11 +118,11 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         return cx[mejor], cy[mejor]
 
     def marco_y(xl, qx, qy, yfin):
-        # Lateral del marco: puntos más de fondo_marco por detrás de la recta (x = xl), justo donde acaba la pared
+        # Lateral del marco: puntos más de fondo_marco por detrás de la recta (x = xl), donde acaba la pared
         m = (qx > xl + fondo_marco) & (qx < xl + banda) & (qy > yfin - 0.05) & (qy < yfin + 0.25)
         return float(np.median(qy[m])) if np.sum(m) >= 3 else None
 
-    # 1. Recta de partida (la de más puntos a < 2 cm); 2. recta definitiva con su tramo continuo más largo
+    # Recta de partida con más puntos alineados y recta definitiva con su tramo continuo más largo
     n, a, b = mejor_recta(x, y)
     if n < min_puntos:
         datos['n'] = n
@@ -140,8 +135,7 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         b, a = np.polyfit(y, x, 1)
     datos['n'] = int(len(x))
     datos['rms'] = float(np.sqrt(np.mean((x - (a + b * y)) ** 2)))
-    # Rumbo: la recta debería ir exactamente en dirección Y. Se corrige girando los puntos alrededor del robot
-    # (así su posición no cambia con el giro); después, la X.
+    # La recta debería ir en dirección Y: el rumbo se corrige girando los puntos alrededor del robot, y después la X
     dth = math.atan(b)
     c, s = math.cos(dth), math.sin(dth)
 
@@ -157,28 +151,25 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
         return dx, 0.0, dth, '', 'dx', datos
     if abs(dth) > max_ang:
         return dx, 0.0, dth, '', 'dth', datos
-    # 3. Borde cercano: el lateral del marco, justo donde acaba el tramo de pared (la canaleta)
+    # Borde cercano: el lateral del marco, donde acaba el tramo de pared
     qx, qy = girar(px[en_banda], py[en_banda])
     yfin = float(np.max(yr))
     datos['y_fin'] = yfin
     y1 = marco_y(datos['x_linea'], qx, qy, yfin)
     if y1 is None:
-        # Sin marco: el final de la canaleta. Creíble solo si justo después hay un escalón hacia atrás (el yeso); algo
-        # apoyado en la pared cortaría el tramo, pero quedaría por delante de la recta, no por detrás.
-        # Basta 1 punto (06/11 14:36): de lado, el escalón da 2-3 rayos y el primero (< 2 cm por detrás) entra en la
-        # recta; con >= 2 quedó 1 y no se corrigió la Y (+0.45 m: SIN_CAMINO en la puerta). Detrás de la recta solo
-        # puede estar la pared, y el scan ya es la mediana de reloc_scans.
+        # Sin marco se usa el final de la canaleta, que solo es creíble si justo después hay un escalón hacia atrás
+        # (el yeso). Basta un punto: de lado, el escalón da 2-3 rayos y el primero entra en la recta.
         escalon = ((qx > datos['x_linea'] + 0.02) & (qx < datos['x_linea'] + 0.20)
                    & (qy > yfin) & (qy < yfin + 0.20))
         if y_fin_canaleta is not None and np.sum(escalon) >= 1 and abs(y_fin_canaleta - yfin) <= max_dy:
             return dx, y_fin_canaleta - yfin, dth, 'total', 'canaleta', datos
         return dx, 0.0, dth, 'parcial', 'sin_borde', datos
     datos['y1'] = y1
-    # Borde creíble: pared justo antes de y1, y nada sobre la línea de pared en los 0.5*ancho siguientes
+    # Borde creíble: pared justo antes de y1 y nada sobre la línea de pared en los 0.5*ancho siguientes
     linea = np.abs(qx - datos['x_linea']) < 0.05
     antes = np.sum(linea & (qy > y1 - 0.5) & (qy <= y1))
     ocupado = np.sum(linea & (qy > y1 + 0.02) & (qy < y1 + 0.5 * ancho))
-    # Ancho, solo como aviso: hasta el primer punto sobre la línea al otro lado (la bisagra de la hoja)
+    # Ancho del hueco, solo como aviso: hasta el primer punto sobre la línea al otro lado (la bisagra de la hoja)
     lejos = qy[(np.abs(qx - datos['x_linea']) < 0.03) & (qy >= y1 + 0.5 * ancho)]
     if len(lejos):
         datos['y2'] = float(lejos.min())
@@ -193,19 +184,17 @@ def ajuste_puerta(px, py, rx, ry, x_pared, y_borde, ancho, tol_ancho, banda, lar
 
 
 def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy, sig_th, min_puntos):
-    # Corrección de la pose con el mapa: la actualización del EKF (Localization, diapositivas 10-11), con cada punto del
-    # LiDAR cerca de una pared como una medida. 'mapa' tiene, por celda, la distancia a la pared y su gradiente.
-    # Si el punto está a distancia d de la pared, mover el robot (dx, dy, dth) debería llevarlo a d = 0:
-    #     g * (dx, dy) + rotación * dth = -d
-    # Se resuelve por mínimos cuadrados, con un término que mantiene (dx, dy, dth) cerca de 0: la confianza en la
-    # predicción de la odometría. Así, lo que las paredes no observan (avanzar a lo largo de un pasillo) no se mueve.
-    # Solo se usan los puntos a menos de 'ventana' de una pared: mesas, sillas y personas quedan fuera.
-    # Devuelve (dx, dy, dth, n), con n los puntos usados; (0, 0, 0, n) si son menos de min_puntos.
+    # Corrección de la pose con el mapa, como la actualización del filtro de Kalman extendido: cada punto del LiDAR
+    # cerca de una pared es una medida. 'mapa' tiene, por celda, la distancia a la pared y su gradiente.
+    # Se resuelve por mínimos cuadrados que mover el robot (dx, dy, dth) lleve cada punto a distancia 0 de su pared,
+    # con un término que mantiene la corrección cerca de 0 (confianza en la odometría).
+    # Solo se usan los puntos a menos de 'ventana' de una pared, así que mesas y personas quedan fuera.
+    # Devuelve (dx, dy, dth, n), con n los puntos usados; la corrección es 0 si son menos de min_puntos.
     res = meta['resolucion']
     info = np.diag([1.0 / sig_xy ** 2, 1.0 / sig_xy ** 2, 1.0 / sig_th ** 2])
     dx, dy, dth = 0.0, 0.0, 0.0
     n = 0
-    for _ in range(3):                  # 3 iteraciones: la normal de cada punto cambia al mover la pose
+    for _ in range(3):                  # la normal de cada punto cambia al mover la pose
         rx, ry, rth = x + dx, y + dy, th + dth
         lx = rx + offset * math.cos(rth)
         ly = ry + offset * math.sin(rth)
@@ -230,15 +219,14 @@ def ajuste_mapa(r, a, x, y, th, offset, mapa, meta, ventana, sig_medida, sig_xy,
 
 
 def ajuste_paredes(px, py, paredes, ventana, sig_medida, sig_xy, min_puntos):
-    # Corrección de la pose en el pasillo con sus paredes medidas con cinta: la actualización del filtro de Kalman en 1D
-    # (Localization, diapositiva 9: se combinan dos estimaciones con incertidumbre, la de la odometría y la de la pared).
-    # px, py: puntos del LiDAR en el mundo con la pose creída. paredes: lista de (eje, valor, desde, hasta); eje 'y' es la
-    # recta y = valor para x entre desde y hasta (corrige la Y), y eje 'x', la recta x = valor para y entre desde y hasta
-    # (corrige la X). El rumbo no se toca: el del IMU es mejor que el de las paredes (bags del 06/11).
-    # Cada punto a menos de 'ventana' de una pared es una medida de cuánto se ha desplazado el robot: e = valor - punto.
-    # Con n medidas de varianza sig_medida² y la odometría (varianza sig_xy²):
+    # Corrección de la pose en el pasillo con sus paredes medidas con cinta, como un filtro de Kalman en 1D que combina
+    # la odometría con la pared. px, py son los puntos del LiDAR en el mundo con la pose creída. paredes es una lista de
+    # (eje, valor, desde, hasta): eje 'y' es la recta y = valor para x entre desde y hasta (corrige la Y), y eje 'x'
+    # la recta x = valor para y entre desde y hasta (corrige la X). El rumbo no se toca, porque el del IMU es mejor.
+    # Cada punto a menos de 'ventana' de una pared mide cuánto se ha desplazado el robot: e = valor - punto.
+    # Con n medidas de varianza sig_medida² y la odometría de varianza sig_xy²:
     #     d = (suma de e / sig_medida²) / (n / sig_medida² + 1 / sig_xy²)
-    # Devuelve (dx, dy, nx, ny): la corrección y los puntos de cada eje (con menos de min_puntos, esa corrección es 0).
+    # Devuelve (dx, dy, nx, ny): la corrección y los puntos de cada eje (con menos de min_puntos, la corrección es 0).
     suma = {'x': 0.0, 'y': 0.0}
     n = {'x': 0, 'y': 0}
     for eje, valor, desde, hasta in paredes:
@@ -259,10 +247,9 @@ def ajuste_paredes(px, py, paredes, ventana, sig_medida, sig_xy, min_puntos):
 
 
 def revisar_pose_inicial(pose, estimada, resumen, eje_rumbo, min_puntos, max_rms, max_corr, max_ang):
-    # Con la pose de salida dada (initial_pose) y la estimada con las paredes del mapa (comprobar_pose.estimar, con el
-    # robot parado): qué se aplica y si vale. El rumbo, si se han visto paredes del eje del rumbo (eje_rumbo; '' =
-    # cualquiera); cada coordenada, solo si se han visto paredes de ese eje (en B y C solo se ven las del eje Y: la X
-    # se queda la de la cruz, como se hacía a mano con comprobar_pose).
+    # Compara la pose de salida dada (initial_pose) con la estimada con las paredes del mapa (comprobar_pose.estimar)
+    # y decide qué se aplica. El rumbo solo se corrige si se han visto paredes del eje_rumbo ('' = cualquiera), y cada
+    # coordenada solo si se han visto paredes de ese eje (en B y C no se ve la pared del fondo y la X se queda).
     # Devuelve (x, y, th, motivo): motivo '' si vale; si no, por qué no (y la pose dada sin tocar).
     x, y, th = pose
     ejes = {c['eje'] for c in resumen}
@@ -282,14 +269,13 @@ def revisar_pose_inicial(pose, estimada, resumen, eje_rumbo, min_puntos, max_rms
 
 
 def quitar_hasta(objetivos, nombre):
-    # La lista de objetivos sin los que van hasta 'nombre' inclusive (salida desde B, C o D). '' o un nombre que no está:
-    # la lista entera.
+    # Devuelve los objetivos sin los que van hasta 'nombre' inclusive. Con '' o un nombre que no está, devuelve todos.
     nombres = [o[0] for o in objetivos]
     return objetivos[nombres.index(nombre) + 1:] if nombre in nombres else objetivos
 
 
 def rampa(v, v_anterior, paso):
-    # Al acelerar, como mucho 'paso' más que la velocidad anterior; al frenar (o parar), sin límite
+    # Al acelerar, como mucho 'paso' más que la velocidad anterior; al frenar no hay límite
     return min(v, v_anterior + paso) if v > v_anterior else v
 
 
@@ -298,14 +284,13 @@ def longitud_camino(puntos):
 
 
 def rodeo_largo(nuevo, antes, ratio, extra):
-    # 06/11 15:10: con el pasillo de E a la puerta tapado (otro robot), el replan daba la vuelta por las mesas, hacia
-    # atrás. Un camino así de largo para un obstáculo que se mueve: mejor esperar a que se vaya.
+    # Un camino nuevo mucho más largo que el que quedaba es un rodeo largo: si el obstáculo se mueve, mejor esperar.
     return nuevo > ratio * antes + extra
 
 
 def recta_ransac(u, v, max_pendiente, tol=0.02, sep=0.20):
-    # Recta v = a + b*u con más puntos a < tol (pares de puntos separados más de sep en u, |b| <= max_pendiente),
-    # reajustada por mínimos cuadrados con esos puntos. Devuelve (a, b, máscara de inliers) o None.
+    # Recta v = a + b*u con más puntos a menos de tol (probando pares separados más de sep en u, con |b| <=
+    # max_pendiente), reajustada por mínimos cuadrados con esos puntos. Devuelve (a, b, máscara de puntos) o None.
     mejor = (0, None)
     for i in range(len(u)):
         for j in range(i + 1, len(u)):
@@ -328,13 +313,12 @@ def recta_ransac(u, v, max_pendiente, tol=0.02, sep=0.20):
 
 def ajuste_esquina(px, py, rx, ry, x_pared, y_pared, banda, alcance, max_rms, min_puntos, max_corr, max_ang,
                    max_dif_ang, eje_rumbo='Y'):
-    # Relocalización con dos paredes perpendiculares medidas con cinta (06/11: la esquina junto a Q, x = x_pared delante
-    # e y = y_pared a un lado). Como comprobar_pose en A, pero sin el mapa, que detrás de la puerta está mal en Y (~0.3 m).
-    # px, py: lecturas al mundo con la pose creída (rx, ry). Cada pared: los puntos a menos de 'banda' de su recta y a
-    # menos de 'alcance' del robot a lo largo de ella; recta por RANSAC. El rumbo, la media (por puntos) del de las dos
-    # rectas; después, girando los puntos alrededor del robot, la distancia a cada pared da dx y dy.
-    # eje_rumbo: el rumbo sale solo de la pared de ese eje ('Y' = la recta y = y_pared, como pose_heading_axis en A;
-    # '' = las dos). En Q las dos paredes no son perpendiculares: ~3° entre ellas (bags del 06/11).
+    # Relocalización con dos paredes perpendiculares medidas con cinta (la esquina junto a Q: x = x_pared delante e
+    # y = y_pared a un lado). No usa el mapa, que detrás de la puerta está mal en Y.
+    # px, py son las lecturas en el mundo con la pose creída (rx, ry). De cada pared se toman los puntos a menos de
+    # 'banda' de su recta y a menos de 'alcance' del robot, y se ajusta una recta con RANSAC. El rumbo sale de las
+    # rectas y, girando los puntos alrededor del robot, la distancia a cada pared da dx y dy.
+    # eje_rumbo: 'Y' usa solo la pared y = y_pared para el rumbo, 'X' solo la otra y '' las dos.
     # Devuelve (dx, dy, dth, motivo, datos): motivo '' si vale; si no, por qué no se corrige.
     datos = {'nx': 0, 'ny': 0, 'rms_x': None, 'rms_y': None, 'dth_x': None, 'dth_y': None}
     pend = math.tan(max_ang)
@@ -376,8 +360,7 @@ class Fase1Node(Node):
     def __init__(self):
         super().__init__('fase1_node')
 
-        # 1. Parámetros. Sin valores por defecto: todo viene de config/fase1.yaml.
-        #    Si falta alguno, el nodo falla al arrancar en vez de usar un valor inventado.
+        # Parámetros, sin valores por defecto: vienen de config/fase1.yaml y, si falta alguno, el nodo falla al arrancar
         D = Parameter.Type.DOUBLE
         DA = Parameter.Type.DOUBLE_ARRAY
         SA = Parameter.Type.STRING_ARRAY
@@ -390,8 +373,7 @@ class Fase1Node(Node):
 
         control_rate = self.declare_parameter('control_rate', D).value
         self.dt_control = 1.0 / control_rate
-        # Rampa de aceleración (solo al acelerar; frenar es inmediato). 06/11: de 0 a 0.20 m/s de golpe, el robot
-        # cabeceaba y el rumbo de /odom (del IMU de la OpenCR) saltaba ~30°: GIRAR/AVANZAR sin avanzar.
+        # Rampa de aceleración (solo al acelerar). Sin ella, el tirón al arrancar hace saltar el rumbo del IMU
         self.acel_max = self.declare_parameter('max_linear_accel', D).value
         self.tol_waypoint = self.declare_parameter('tol_waypoint', D).value
         self.tol_obligatorio = self.declare_parameter('tol_mandatory', D).value
@@ -408,7 +390,7 @@ class Fase1Node(Node):
         self.timeout = self.declare_parameter('scan_timeout', D).value
         self.lidar_offset_x = self.declare_parameter('lidar_offset_x', D).value
         self.lidar_yaw_offset = self.declare_parameter('lidar_yaw_offset', D).value
-        # Relocalización con la pared de la puerta, en el último waypoint antes de reloc_before (robot parado)
+        # Relocalización con la pared de la puerta, en el último waypoint antes de reloc_before
         self.reloc_antes_de = self.declare_parameter('reloc_before', Parameter.Type.STRING).value
         self.reloc_n = self.declare_parameter('reloc_scans', Parameter.Type.INTEGER).value
         self.reloc_bloqueo_dist = self.declare_parameter('reloc_on_block_dist', D).value
@@ -430,7 +412,7 @@ class Fase1Node(Node):
         self.reloc_fin_canaleta = self.declare_parameter('reloc_duct_end_y', D).value
         self.reloc_reintento_dist = self.declare_parameter('reloc_retry_dist', D).value
         self.reloc_reintento_max = self.declare_parameter('reloc_retry_max', Parameter.Type.INTEGER).value
-        # Relocalización en Q con las dos paredes de la esquina (medidas con cinta), al llegar
+        # Relocalización en Q con las dos paredes de la esquina, al llegar
         self.reloc_q_en = self.declare_parameter('reloc_q_at', Parameter.Type.STRING).value
         self.reloc_q_veces = self.declare_parameter('reloc_q_times', Parameter.Type.INTEGER).value
         self.reloc_q_pared_x = self.declare_parameter('reloc_q_wall_x', D).value
@@ -443,7 +425,7 @@ class Fase1Node(Node):
         self.reloc_q_max_corr = self.declare_parameter('reloc_q_max_corr', D).value
         self.reloc_q_max_ang = math.radians(self.declare_parameter('reloc_q_max_angle_deg', D).value)
         self.reloc_q_max_dif = math.radians(self.declare_parameter('reloc_q_max_angle_diff_deg', D).value)
-        # Corrección continua con el mapa de distancias. Modo: "apagado", "sombra" (calcula y registra, no aplica) o "activo"
+        # Corrección continua con el mapa de distancias. Modo: "apagado", "sombra" (solo registra) o "activo"
         self.corr_modo = self.declare_parameter('map_corr_mode', Parameter.Type.STRING).value
         self.corr_cada = self.declare_parameter('map_corr_every_scans', Parameter.Type.INTEGER).value
         self.corr_max_w = self.declare_parameter('map_corr_max_turn_rate', D).value
@@ -456,8 +438,8 @@ class Fase1Node(Node):
         self.corr_max_xy = self.declare_parameter('map_corr_max_step', D).value
         self.corr_max_th = math.radians(self.declare_parameter('map_corr_max_angle_deg', D).value)
         self.corr_min_puntos = self.declare_parameter('map_corr_min_points', Parameter.Type.INTEGER).value
-        # Corrección en el pasillo con sus paredes medidas con cinta (ajuste_paredes), con el robot dentro de
-        # corridor_corr_zone. Modo como map_corr_mode; cadencia, ventana, sigmas y límites, los de map_corr_*.
+        # Corrección en el pasillo con sus paredes (ajuste_paredes), con el robot dentro de corridor_corr_zone.
+        # Usa el mismo modo y los mismos parámetros que map_corr_*.
         self.pasillo_modo = self.declare_parameter('corridor_corr_mode', Parameter.Type.STRING).value
         self.pasillo_zona = self.declare_parameter('corridor_corr_zone', DA).value   # [x_min, x_max, y_min, y_max]
         self.pasillo_alcance = self.declare_parameter('corridor_corr_max_range', D).value
@@ -472,7 +454,7 @@ class Fase1Node(Node):
         log_file = self.declare_parameter('log_file', Parameter.Type.STRING).value
         self.log_period = self.declare_parameter('log_period', D).value
 
-        # Paso 3: obstáculos nuevos y replanificación
+        # Obstáculos nuevos y replanificación
         self.margen_estatico = self.declare_parameter('obstacle_static_margin', D).value
         self.margen_plan = self.declare_parameter('obstacle_plan_margin', D).value
         self.memoria = self.declare_parameter('obstacle_memory_time', D).value
@@ -481,8 +463,7 @@ class Fase1Node(Node):
         self.dist_min_cero = self.declare_parameter('obstacle_clear_zero_min_dist', D).value
         self.separacion_log = self.declare_parameter('obstacle_log_spacing', D).value
         self.alcance_obstaculos = self.declare_parameter('obstacle_max_range', D).value
-        # Más cerca que esto no se recuerda nada (solo puede ser el propio robot o un eco de la ventana del LiDAR).
-        # La parada de emergencia del cono frontal NO usa este filtro.
+        # Más cerca que esto no se recuerda nada (será el propio robot o un eco). La parada de emergencia no lo usa.
         self.alcance_min_obstaculos = self.declare_parameter('obstacle_min_range', D).value
         self.giro_max_obstaculos = self.declare_parameter('obstacle_max_turn_rate', D).value
         # Pilares de las estaciones de carga (fase II, pilares.py)
@@ -497,13 +478,13 @@ class Fase1Node(Node):
         self.histeresis = self.declare_parameter('block_hysteresis', D).value
         self.espera = self.declare_parameter('obstacle_wait_time', D).value
         self.reintento = self.declare_parameter('replan_retry_period', D).value
-        # Rodeo largo: un camino nuevo más largo que replan_max_ratio * el que queda + replan_max_extra no se toma hasta
-        # llevar replan_long_detour_after s sin camino (un robot o una persona en el pasillo se va: mejor esperar)
+        # Un camino nuevo más largo que replan_max_ratio * el que queda + replan_max_extra no se toma hasta llevar
+        # replan_long_detour_after s sin camino, porque un robot o una persona en el pasillo se acaba yendo
         self.rodeo_ratio = self.declare_parameter('replan_max_ratio', D).value
         self.rodeo_extra = self.declare_parameter('replan_max_extra', D).value
         self.rodeo_espera = self.declare_parameter('replan_long_detour_after', D).value
-        # Obligatorio tapado: tras mandatory_cover_wait s sin camino, se va al punto libre más cercano a él (a menos de
-        # mandatory_cover_radius) y se da por alcanzado (OBLIGATORIO_TAPADO). Nunca para los de mandatory_cover_exclude.
+        # Obligatorio tapado: tras mandatory_cover_wait s sin camino, va al punto libre más cercano (a menos de
+        # mandatory_cover_radius) y lo da por alcanzado (OBLIGATORIO_TAPADO), salvo los de mandatory_cover_exclude
         self.tapado_radio = self.declare_parameter('mandatory_cover_radius', D).value
         self.tapado_espera = self.declare_parameter('mandatory_cover_wait', D).value
         self.tapado_excluir = self.declare_parameter('mandatory_cover_exclude', SA).value
@@ -515,12 +496,12 @@ class Fase1Node(Node):
         self.simp_tope = self.declare_parameter('simplify_clearance_cap', D).value
         self.simp_margen = self.declare_parameter('simplify_margin', D).value
         self.simp_paso = self.declare_parameter('simplify_step', D).value
-        # Anclas: puntos de la secuencia (B, D...) por los que hay que pasar aunque no sean obligatorios
-        # (B y D rodean las mesas, que no están en el mapa)
+        # Anclas: puntos de la secuencia (B, D...) por los que hay que pasar aunque no sean obligatorios,
+        # porque rodean las mesas, que no están en el mapa
         self.anclas = self.declare_parameter('planning_sequence', SA).value
         self.obligatorios = obligatorios
 
-        # Holgura estática de la rejilla de 5 cm (paso 2) y sus metadatos
+        # Holgura estática de la rejilla de 5 cm y sus metadatos
         ruta = self.declare_parameter('static_clearance_file', Parameter.Type.STRING).value
         if not os.path.isabs(ruta):
             ruta = os.path.join(get_package_share_directory('autonomous_nav'), ruta)
@@ -529,7 +510,7 @@ class Fase1Node(Node):
             m = yaml.safe_load(f)
         self.meta = {'resolucion': m['resolucion'], 'origen_x': m['origen_x'], 'origen_y': m['origen_y']}
 
-        # Mapa de distancias para la corrección con el mapa (lo genera scripts/generar_mapa_distancias.py)
+        # Mapa de distancias para la corrección con el mapa (lo genera generar_mapa_distancias.py)
         self.corr_ultimo_scan = None
         self.corr_cuenta = 0
         if self.corr_modo != 'apagado':
@@ -540,7 +521,7 @@ class Fase1Node(Node):
             with open(ruta.replace('.npy', '.yaml')) as f:
                 self.corr_meta = yaml.safe_load(f)
 
-        # 2. Lista de objetivos: (nombre, x, y, tolerancia). Al final, la posición de la pose final.
+        # Lista de objetivos: (nombre, x, y, tolerancia). Al final, la posición de la pose final
         if not (len(nombres) == len(xs) == len(ys)):
             raise ValueError('waypoint_names, waypoints_x y waypoints_y deben tener la misma longitud')
         posiciones = [nombres.index(n) for n in obligatorios if n in nombres]
@@ -554,8 +535,8 @@ class Fase1Node(Node):
         self.i_objetivo = 0
         self.estado = 'GIRAR'
         self.fase = 'I'             # current_phase del Mission Log
-        # Fase II en el mismo lanzamiento (phase2_enabled): al acabar la fase I, parado phase2_start_delay s, la ruta de
-        # cobertura del pasillo y la vuelta a P Base (phase2_final_pose)
+        # Fase II (phase2_enabled): al acabar la fase I espera phase2_start_delay s, recorre la ruta de cobertura del
+        # pasillo y vuelve a P Base (phase2_final_pose)
         self.fase2_activa = self.declare_parameter('phase2_enabled', Parameter.Type.BOOL).value
         self.fase2_nombres = self.declare_parameter('phase2_waypoint_names', SA).value
         self.fase2_x = self.declare_parameter('phase2_waypoints_x', DA).value
@@ -565,8 +546,7 @@ class Fase1Node(Node):
         self.fase2_max_v = self.declare_parameter('phase2_max_linear_speed', D).value
         if not (len(self.fase2_nombres) == len(self.fase2_x) == len(self.fase2_y)):
             raise ValueError('phase2_waypoint_names, phase2_waypoints_x y phase2_waypoints_y: misma longitud')
-        # Segunda cobertura (07/11): si al acabar la primera no se ha confirmado la estación cuadrada, estas pasadas antes de
-        # P Base ("Once the Corridor area is completely explored and the station is identified": enunciado)
+        # Segunda cobertura: si tras la primera no se ha confirmado la estación cuadrada, estas pasadas antes de P Base
         self.fase2b_activa = self.declare_parameter('phase2_second_coverage', Parameter.Type.BOOL).value
         self.fase2b_nombres = self.declare_parameter('phase2_second_waypoint_names', SA).value
         self.fase2b_x = self.declare_parameter('phase2_second_waypoints_x', DA).value
@@ -574,8 +554,8 @@ class Fase1Node(Node):
         if not (len(self.fase2b_nombres) == len(self.fase2b_x) == len(self.fase2b_y)):
             raise ValueError('phase2_second_waypoint_names, _x y _y: misma longitud')
         self.cobertura = 1          # qué cobertura del pasillo se está haciendo (fase II)
-        # Fase III en el mismo lanzamiento (07/11): de P Base a delante de la estación cuadrada, medir sus patas parado,
-        # entrar recto hasta su centro y comprobar el aparcado (estados MEDIR3, ENTRAR y VERIFICAR3)
+        # Fase III (phase3_enabled): de P Base a delante de la estación cuadrada, mide sus patas parado, entra recto
+        # hasta su centro y comprueba el aparcado (estados MEDIR3, ENTRAR y VERIFICAR3)
         self.fase3_activa = self.declare_parameter('phase3_enabled', Parameter.Type.BOOL).value
         self.f3_dist = self.declare_parameter('phase3_front_dist', D).value
         self.f3_n = self.declare_parameter('phase3_scans', Parameter.Type.INTEGER).value
@@ -592,10 +572,8 @@ class Fase1Node(Node):
         self.f3_centro = None       # objetivo de ENTRAR en el mundo (el centro de la estación medido desde delante)
         self.f3_patas = []          # patas de la estación en el mundo: la parada de emergencia no para por ellas
         self.t_pausa = None
-        # Salida desde B, C o D (06/11: la demo puede empezar en A, B, C o D, con paneles de madera movidos como obstáculos
-        # por la zona de salida). start_after: se quitan los waypoints hasta ese inclusive (B para B y C; D para D).
-        # plan_at_start: parado, start_scans scans para llenar la memoria de obstáculos y planificar desde la pose inicial
-        # hasta el siguiente obligatorio (pasando por las anclas): así sale del encierro de paneles, estén como estén.
+        # Salida desde A, B, C o D. start_after quita los waypoints hasta ese inclusive. Con plan_at_start, el robot
+        # parado junta start_scans scans para llenar la memoria de obstáculos y planifica desde la pose inicial.
         despues_de = self.declare_parameter('start_after', Parameter.Type.STRING).value
         self.planificar_al_salir = self.declare_parameter('plan_at_start', Parameter.Type.BOOL).value
         self.scans_salida = self.declare_parameter('start_scans', Parameter.Type.INTEGER).value
@@ -605,9 +583,8 @@ class Fase1Node(Node):
             self.estado = 'INICIO'
         self.salida_scans = 0
         self.salida_ultimo_scan = None
-        # Pose de salida con el LiDAR (07/11): parado, antes de moverse, lo que hacía a mano comprobar_pose --escribir.
-        # El robot se coloca a ojo (rumbo a menos de ~10° de initial_pose) y el nodo corrige el rumbo y la posición con
-        # las paredes del mapa (estado POSE_INICIAL). Si no vale, no se mueve y lo reintenta con scans nuevos.
+        # Pose de salida con el LiDAR (estado POSE_INICIAL): el robot se coloca a ojo y, parado, el nodo corrige el
+        # rumbo y la posición con las paredes del mapa. Si no vale, no se mueve y reintenta con scans nuevos.
         self.pi_activa = self.declare_parameter('start_pose_check', Parameter.Type.BOOL).value
         self.pi_n = self.declare_parameter('start_pose_scans', Parameter.Type.INTEGER).value
         self.pi_min_puntos = self.declare_parameter('start_pose_min_points', Parameter.Type.INTEGER).value
@@ -615,8 +592,8 @@ class Fase1Node(Node):
         self.pi_max_corr = self.declare_parameter('start_pose_max_corr', D).value
         self.pi_max_ang = math.radians(self.declare_parameter('start_pose_max_angle_deg', D).value)
         self.pi_eje_rumbo = self.declare_parameter('pose_heading_axis', Parameter.Type.STRING).value
-        self.pi_scans = []          # scans juntados en POSE_INICIAL (con el valor nan = sin dato)
-        self.pi_wz = []             # y, mientras, el giro de /imu y el rumbo de /odom (con el robot quieto: ~0)
+        self.pi_scans = []          # scans juntados en POSE_INICIAL (nan = sin dato)
+        self.pi_wz = []             # y, mientras, el giro de /imu y el rumbo de /odom (con el robot quieto, ~0)
         self.pi_yaws = []
         self.pi_ultimo_scan = None
         self.estado_tras_pose = self.estado   # INICIO o GIRAR
@@ -624,7 +601,7 @@ class Fase1Node(Node):
             self.caras = cp.cargar_caras()
             self.estado = 'POSE_INICIAL'
 
-        # 3. Estimación de la pose (odometría + giróscopo) y cuándo llegó cada sensor (reloj del nodo)
+        # Estimación de la pose (odometría y giróscopo) y cuándo llegó cada sensor (reloj del nodo)
         self.odom_anterior = None   # última lectura de /odom: (x, y, theta) en el sistema de /odom
         self.x_rel = 0.0            # pose relativa al arranque: lo que se ha movido desde la salida
         self.y_rel = 0.0
@@ -638,13 +615,12 @@ class Fase1Node(Node):
         self.scan = None
         self.t_scan = None
 
-        # Banderas para registrar los eventos solo cuando cambian (y no en cada ciclo)
+        # Banderas para registrar los eventos solo cuando cambian
         self.sin_sensores = True
         self.frenado = False
         self.t_ultimo_log = None
 
-        # Memoria de obstáculos nuevos: celda de 5 cm -> [x, y, última vez que se vio (s), escaneos seguidos
-        # en los que los rayos lo ven libre]
+        # Memoria de obstáculos nuevos: cada celda de 5 cm guarda [x, y, última vez visto (s), scans seguidos viéndolo libre]
         self.obstaculos = {}
         self.scan_borrado = None    # último scan con el que se contaron esos escaneos (se cuenta una vez por scan)
         self.obstaculos_log = []    # posiciones ya escritas en el Mission Log
@@ -657,24 +633,24 @@ class Fase1Node(Node):
         self.v_anterior = 0.0       # última velocidad lineal mandada (rampa de aceleración)
         self.reloc_scans_lista = [] # scans juntados en RELOC
         self.t_sin_camino = None    # desde cuándo no hay camino (para el obligatorio tapado)
-        self.sustitutos = {}        # nombre del sustituto -> (obligatorio, x, y)
+        self.sustitutos = {}        # sustituto: (obligatorio, x, y)
         self.reloc_ultimo_scan = None
         self.reloc_adelantada = False   # ya se ha relocalizado por un bloqueo antes del waypoint (solo una vez)
-        self.reloc_tipo = 'puerta'      # qué relocalización hace el estado RELOC: 'puerta' (ajuste_puerta) o 'Q' (esquina)
-        self.reloc_puerta_total = False # ya ha salido una relocalización total en la puerta (si no, se reintenta)
+        self.reloc_tipo = 'puerta'      # relocalización del estado RELOC: 'puerta' (ajuste_puerta) o 'Q' (esquina)
+        self.reloc_puerta_total = False # ya hubo una relocalización total en la puerta (si no, se reintenta)
         self.reloc_reintentos = 0
         self.reloc_q_hechas = 0
         self.rodeo_rechazado = None     # (longitud nueva, la que quedaba) del último rodeo no aceptado
 
-        # 4. Publicador y suscriptores (QoS como en la plantilla)
+        # Publicador y suscriptores, con el QoS de la plantilla
         qos_profile_b = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=10)
         qos_profile_r = QoSProfile(reliability=ReliabilityPolicy.RELIABLE, depth=10)
         self.publisher = self.create_publisher(TwistStamped, '/cmd_vel', qos_profile_r)
         self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_b)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile_b)
-        self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)  # siempre: se registra en el log
+        self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)  # se registra siempre en el log
 
-        # 5. Mission Log. Un fichero por ejecución (con la fecha) para no machacar el de otra prueba.
+        # Mission Log: un fichero por ejecución (con la fecha) para no machacar el anterior
         base, ext = os.path.splitext(log_file)
         ruta_log = f"{base}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
         self.fichero = open(ruta_log, 'w', newline='')
@@ -683,12 +659,12 @@ class Fase1Node(Node):
                            'state', 'event', 'error', 'obstacle_x', 'obstacle_y', 'yaw_odom', 'yaw_imu'])
         self.get_logger().info(f'Mission Log en {os.path.abspath(ruta_log)}')
 
-        # 6. Bucle de control a ritmo fijo
+        # Bucle de control a ritmo fijo
         self.create_timer(1.0 / control_rate, self.control_loop)
 
     # ---------- Callbacks ----------
-    # /scan solo guarda el último mensaje. /odom y /imu además ACUMULAN: integrar no admite saltarse
-    # mensajes, así que la integración (pocas líneas) va aquí y no en el timer.
+    # /scan solo guarda el último mensaje. /odom y /imu además se integran aquí, porque integrar no admite saltarse
+    # mensajes.
 
     def odom_callback(self, msg):
         p = msg.pose.pose
@@ -696,7 +672,7 @@ class Fase1Node(Node):
         if self.odom_anterior is not None:
             xa, ya, tha = self.odom_anterior
             # Avance (con signo) desde la lectura anterior, en la dirección en que iba según /odom.
-            # De /odom solo nos fiamos de la distancia: el rumbo, si se puede, lo da el giróscopo.
+            # De /odom solo se usa la distancia: el rumbo, si se puede, lo da el giróscopo.
             self.yaw_odom += normalizar(th - tha)
             ds = (x - xa) * math.cos(tha) + (y - ya) * math.sin(tha)
             th_antes = self.th_rel
@@ -710,8 +686,7 @@ class Fase1Node(Node):
         self.t_odom = self.get_clock().now()
 
     def imu_callback(self, msg):
-        # Rumbo integrando la velocidad angular del giróscopo (como hace el driver del TB3 real).
-        # Con el sello de tiempo del propio /imu: el dt entre dos lecturas del mismo reloj.
+        # Rumbo integrando la velocidad angular del giróscopo, con el sello de tiempo del propio /imu para el dt
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         if self.t_imu_anterior is not None:
             dt = t - self.t_imu_anterior
@@ -734,11 +709,10 @@ class Fase1Node(Node):
 
     def pose_mundo(self):
         # Pose (x, y, theta) del robot en el sistema del enunciado, o None si aún no hay /odom.
-        # Es la única función que sabe de dónde sale la pose: con el SLAM solo cambiará esta.
         # (x_rel, y_rel, th_rel) es lo que se ha movido desde la salida, con los ejes del robot al salir.
         if self.odom_anterior is None:
             return None
-        # Al mundo: girar theta_i y trasladar a (x_i, y_i)
+        # Al mundo: se gira theta_i y se traslada a (x_i, y_i)
         xi, yi, thi = self.pose_inicial
         x = xi + math.cos(thi) * self.x_rel - math.sin(thi) * self.y_rel
         y = yi + math.sin(thi) * self.x_rel + math.cos(thi) * self.y_rel
@@ -747,13 +721,13 @@ class Fase1Node(Node):
     # ---------- Seguridad ----------
 
     def sensor_caducado(self, t):
-        # True si el sensor no ha llegado nunca o lleva más de scan_timeout sin llegar
+        # Devuelve True si el sensor no ha llegado nunca o lleva más de scan_timeout sin llegar
         if t is None:
             return True
         return (self.get_clock().now() - t).nanoseconds * 1e-9 > self.timeout
 
     def obstaculo_delante(self, x, y, th):
-        # Lectura válida más cercana del cono frontal que esté a menos de stop_distance.
+        # Busca la lectura válida más cercana del cono frontal a menos de stop_distance.
         # Devuelve su posición en el mundo (ox, oy), o None si el cono está libre.
         msg = self.scan
         r_min = None
@@ -762,37 +736,34 @@ class Fase1Node(Node):
             # 0.0, inf, nan o fuera de [range_min, range_max] = sin dato
             if not (math.isfinite(r) and msg.range_min <= r <= msg.range_max):
                 continue
-            # Ángulo de cada lectura (no suponemos 360 muestras ni que el índice 0 sea el frente)
+            # Ángulo de cada lectura (sin suponer 360 muestras ni que el índice 0 sea el frente)
             a = normalizar(msg.angle_min + i * msg.angle_increment)
             if abs(a) <= self.cono and r < self.stop_distance and (r_min is None or r < r_min):
                 if self.estado == 'ENTRAR' and self.es_pata(x, y, th, r, a):
-                    continue        # fase III: entrar entre las patas es la maniobra; cualquier otra cosa sí para
+                    continue        # en la fase III las patas de la estación no paran al robot, pero lo demás sí
                 r_min = r
                 a_min = a
         if r_min is None:
             return None
-        # El LiDAR está desplazado lidar_offset_x sobre el eje del robot
+        # El LiDAR está desplazado lidar_offset_x respecto al eje del robot
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
         return lx + r_min * math.cos(th + a_min), ly + r_min * math.sin(th + a_min)
 
     def es_pata(self, x, y, th, r, a):
-        # ¿La lectura (r, a) del LiDAR cae a menos de phase3_leg_clearance de una pata conocida de la estación?
+        # Dice si la lectura (r, a) del LiDAR cae a menos de phase3_leg_clearance de una pata conocida de la estación
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
         px, py = lx + r * math.cos(th + a), ly + r * math.sin(th + a)
         return any(math.hypot(px - qx, py - qy) < self.f3_radio_pata for qx, qy in self.f3_patas)
 
-    # ---------- Obstáculos nuevos y replanificación (paso 3) ----------
+    # ---------- Obstáculos nuevos y replanificación ----------
 
     def actualizar_obstaculos(self, x, y, th, ahora):
-        # Memoria de obstáculos nuevos (lo que el LiDAR ve y el mapa no explica).
-        # - Se añade cada lectura válida que cae donde la holgura estática es > obstacle_static_margin.
-        # - Se olvida si lleva obstacle_memory_time sin verse, o si ahora un rayo del LiDAR pasa a través
-        #   de él (la persona se ha ido). Así no se olvida al girar y dejar de verlo (eso haría oscilar
-        #   al robot entre el plan nuevo y el original), pero tampoco quedan obstáculos fantasma.
-        # Girando deprisa no se toca la memoria: el scan llega con retraso respecto a la pose y las
-        # paredes aparecerían desplazadas (obstáculos falsos, o borrados falsos).
+        # Memoria de obstáculos nuevos (lo que el LiDAR ve y el mapa no explica). Se añade cada lectura válida que cae
+        # donde la holgura estática es mayor que obstacle_static_margin. Se olvida si lleva obstacle_memory_time sin
+        # verse o si un rayo del LiDAR pasa a través de él, pero no por dejar de verlo al girar.
+        # Girando deprisa no se toca la memoria: el scan llega con retraso y las paredes saldrían desplazadas.
         if abs(self.w_anterior) > self.giro_max_obstaculos:
             return
         msg = self.scan
@@ -802,7 +773,7 @@ class Fase1Node(Node):
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
 
-        # a) Lecturas válidas y cercanas en el mundo, y las que no explica el mapa
+        # Lecturas válidas y cercanas en el mundo, y las que no explica el mapa
         validas = (np.isfinite(r) & (r >= max(msg.range_min, self.alcance_min_obstaculos))
                    & (r <= min(msg.range_max, self.alcance_obstaculos)))
         px = lx + r[validas] * np.cos(th + a[validas])
@@ -845,10 +816,9 @@ class Fase1Node(Node):
                 ob[3] = 0
 
     def detectar_pilares(self, x, y, th, ahora):
-        # Fase II: patas de las estaciones de carga (pilares.py). Una vez por scan nuevo y, como la memoria de
-        # obstáculos, no girando deprisa (el scan llega con retraso respecto a la pose).
-        # Solo cuentan los pilares dentro de pillar_zone (el pasillo): en la sala, las patas de sillas y mesas podrían
-        # formar un cuadrado de 44 cm.
+        # Fase II: detecta las patas de las estaciones (pilares.py), una vez por scan nuevo y sin girar deprisa.
+        # Solo cuentan los pilares dentro de pillar_zone (el pasillo), porque en la sala las patas de sillas y mesas
+        # podrían formar un cuadrado de 44 cm.
         msg = self.scan
         if msg is self.scan_pilares or abs(self.w_anterior) > self.giro_max_obstaculos:
             return
@@ -865,19 +835,18 @@ class Fase1Node(Node):
         if est is None:
             return
         tipo, cx, cy, ang, patas = est
-        # ¿Es una que ya conocemos? (del mismo tipo y con el centro a menos de un lado)
+        # Si ya la conocemos (del mismo tipo y con el centro a menos de un lado), se actualiza
         for e in self.estaciones:
             if e['tipo'] == tipo and math.hypot(e['x'] - cx, e['y'] - cy) < self.estacion_lado:
                 break
         else:
             e = {'vistas': 0}
             self.estaciones.append(e)
-        # Se guarda la última estimación (los grupos ya promedian muchos scans)
+        # Se guarda la última estimación, porque los grupos ya promedian muchos scans
         e.update(tipo=tipo, x=cx, y=cy, ang=ang, patas=patas)
         e['vistas'] += 1
-        # Al Mission Log, una vez, cuando ya se ha visto en station_confirm_scans scans: el centro (con el ángulo de la
-        # estación en grados en la columna error) y cada pata. Las de la triangular, como PILAR_DESCARTADA: la estación
-        # de carga del enunciado es solo la cuadrada
+        # Al Mission Log, una vez, cuando se ha visto en station_confirm_scans scans: el centro (con el ángulo en grados
+        # en la columna error) y cada pata. Las de la triangular van como PILAR_DESCARTADA
         if e['vistas'] == self.estacion_confirmar:
             self.get_logger().info(f'Estación {tipo} en ({cx:.2f}, {cy:.2f}), {math.degrees(ang):.1f}°')
             self.escribir_log(x, y, th, 'ESTACION_' + tipo.upper(), math.degrees(ang), cx, cy)
@@ -885,13 +854,11 @@ class Fase1Node(Node):
                 self.escribir_log(x, y, th, 'PILAR' if tipo == 'cuadrada' else 'PILAR_DESCARTADA', None, px, py)
 
     def ruta_bloqueada(self, x, y, extra=0.0):
-        # Obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m).
-        # 'extra' agranda las dos distancias: en ESPERAR, para dar la ruta por libre se pide ese margen
-        # de más (histéresis; sin ella, un obstáculo justo en el límite hace parpadear bloqueo/libre).
-        # Devuelve su posición, o None si la ruta está libre.
-        # Solo hasta el siguiente obligatorio (o su sustituto, o la pose final): lo de después aún no se ha replanificado
-        # y se comprueba al llegar allí. Si no, un obstáculo junto al obligatorio bloquea el tramo siguiente y el replan,
-        # que solo llega hasta el obligatorio, no lo arregla nunca (bucle BLOQUEO/REPLANIFICACION junto a E, 06/11).
+        # Busca un obstáculo nuevo a menos de inflation_radius de la ruta que queda (los próximos block_lookahead m) y
+        # devuelve su posición, o None si la ruta está libre. 'extra' agranda las distancias: en ESPERAR se pide ese
+        # margen de más para dar la ruta por libre (histéresis).
+        # Solo se mira hasta el siguiente obligatorio (o su sustituto, o la pose final), porque el replan no llega más
+        # lejos y un obstáculo junto al obligatorio bloquearía el tramo siguiente sin que el replan lo arreglase.
         if not self.obstaculos:
             return None
         resto = self.objetivos[self.i_objetivo:]
@@ -915,10 +882,8 @@ class Fase1Node(Node):
         s = np.vstack(muestras)
         o = np.array([(v[0], v[1]) for v in self.obstaculos.values()])
         d = np.hypot(s[:, None, 0] - o[None, :, 0], s[:, None, 1] - o[None, :, 1]).min(axis=0)
-        # Un obstáculo que ya está a menos de inflation_radius del robot solo bloquea si la ruta se le acerca todavía más.
-        # 06/11 15:32: con algo a 0.22 m del robot junto a E, cualquier camino (que sale del robot) pasaba a < 0.25 aunque
-        # se alejara: REPLANIFICACION y BLOQUEO cada 2 s durante 25 s. Acercarse sigue bloqueando; la parada de
-        # emergencia del cono frontal no cambia.
+        # Un obstáculo que ya está a menos de inflation_radius del robot solo bloquea si la ruta se le acerca más.
+        # Si no, cualquier camino que sale del robot pasaría a menos del inflado y replanificaría en bucle.
         d_robot = np.hypot(o[:, 0] - x, o[:, 1] - y)
         bloquea = (d < self.inflado + extra) & (d < d_robot - BLOQUEO_ACERCARSE)
         if not np.any(bloquea):
@@ -927,8 +892,8 @@ class Fase1Node(Node):
         return o[k, 0], o[k, 1]
 
     def esperar(self, x, y, th, ahora):
-        # Estado ESPERAR (robot parado). Si la ruta se libera, se sigue con el plan que había.
-        # Si a los obstacle_wait_time s sigue bloqueada, se replanifica (con el robot parado).
+        # Estado ESPERAR (robot parado). Si la ruta se libera, sigue con el plan que había; si a los
+        # obstacle_wait_time s sigue bloqueada, replanifica.
         if self.ruta_bloqueada(x, y, self.histeresis) is None:
             self.t_sin_camino = None
             self.get_logger().info('Ruta libre: sigo con el plan')
@@ -965,9 +930,9 @@ class Fase1Node(Node):
         self.estado = 'GIRAR'
 
     def empezar_fase2(self, x, y, th):
-        # Objetivos de la fase II: la ruta de cobertura y P Base. Todos sus puntos son anclas (un replan no se salta una
-        # pasada). Solo se planifica el primer tramo, y solo si queda lejos (la pose final de la fase I puede no ser Q):
-        # planificar las pasadas las llevaría al centro del pasillo (el planificador busca holgura) y dejarían de cubrirlo.
+        # Objetivos de la fase II: la ruta de cobertura y P Base. Todos son anclas, para que un replan no se salte una
+        # pasada. Solo se planifica el primer tramo, y solo si queda lejos: si se planificasen las pasadas, el
+        # planificador las llevaría al centro del pasillo (busca holgura) y dejarían de cubrirlo.
         self.fase = 'II'
         self.cobertura = 1
         self.objetivos = [(n, px, py, self.tol_waypoint) for n, px, py in zip(self.fase2_nombres, self.fase2_x,
@@ -976,7 +941,7 @@ class Fase1Node(Node):
         self.i_objetivo = 0
         self.pose_final = self.fase2_final
         self.anclas = list(self.fase2_nombres)
-        self.obligatorios = self.fase2_nombres[:1]   # replanificar va hasta el siguiente obligatorio: el primer tramo
+        self.obligatorios = self.fase2_nombres[:1]   # replanificar va hasta el siguiente obligatorio
         self.max_v = self.fase2_max_v
         self.estado = 'GIRAR'
         self.get_logger().info(f'FASE II: {self.fase2_nombres} y P Base')
@@ -985,9 +950,8 @@ class Fase1Node(Node):
             self.planificar_final(x, y, th, 'FASE2')
 
     def empezar_fase3(self, x, y, th):
-        # Fase III: a un punto delante de la estación cuadrada (a phase3_front_dist de su centro, perpendicular a uno de sus
-        # lados) mirando a su centro. De los cuatro lados, el más cercano con holgura en el mapa (R está junto a la pared
-        # del extintor: por ese lado no se entra). Al llegar y orientarse, ORIENTAR pasa a MEDIR3.
+        # Fase III: va a un punto delante de la estación cuadrada (a phase3_front_dist de su centro, perpendicular a uno
+        # de sus lados) mirando a su centro. Al llegar y orientarse, pasa de ORIENTAR a MEDIR3.
         self.fase = 'III'
         self.f3_intentos = 0
         est = self.estacion_cuadrada()
@@ -1001,7 +965,7 @@ class Fase1Node(Node):
 
     def ir_delante(self, x, y, th, cx, cy, ang, nombre):
         # Objetivo: el punto a phase3_front_dist del centro (cx, cy), perpendicular al lado (ángulo ang + k·90°) más
-        # cercano al robot con holgura en el mapa, mirando al centro. Sin ninguno: FASE_III_SIN_HUECO y para.
+        # cercano al robot que tenga holgura en el mapa, mirando al centro. Sin ninguno, FASE_III_SIN_HUECO y para.
         delante = []
         for k in range(4):
             a = ang + k * math.pi / 2
@@ -1025,8 +989,9 @@ class Fase1Node(Node):
             self.planificar_final(x, y, th, nombre)
 
     def juntar_patas(self, max_rayos):
-        # Robot parado: los pilares de cada scan nuevo, en el frame del LiDAR (sin la pose: así no influye su error). Con
-        # phase3_scans scans, los agrupa (un grupo = una pata) y devuelve (centro de la cuadrada o None, patas); antes, None.
+        # Con el robot parado, guarda los pilares de cada scan nuevo en el frame del LiDAR, sin usar la pose. Al juntar
+        # phase3_scans scans los agrupa (un grupo es una pata) y devuelve (centro de la cuadrada o None, patas).
+        # Antes de juntarlos devuelve None.
         msg = self.scan
         if msg is self.f3_ultimo_scan:
             return None
@@ -1043,8 +1008,8 @@ class Fase1Node(Node):
         return pil.centro_cuadrada(patas, self.estacion_lado), patas
 
     def medir3(self, x, y, th):
-        # Estado MEDIR3 (parado delante de la estación): el centro de la estación con sus patas, relativo al robot. Es el
-        # objetivo de ENTRAR: así el aparcado no depende del error de la pose (solo de la odometría en el último metro).
+        # Estado MEDIR3 (parado delante de la estación): mide el centro con sus patas, relativo al robot. Es el objetivo
+        # de ENTRAR, así el aparcado no depende del error de la pose sino de la odometría del último metro.
         r = self.juntar_patas(8)
         if r is None:
             return
@@ -1059,13 +1024,14 @@ class Fase1Node(Node):
             if desvio > self.f3_max_desvio:
                 motivo = 'lejos'
         if not motivo:
-            # ¿Entra perpendicular a un lado? Ángulo entre la dirección robot -> centro y la normal del lado más cercano
+            # Comprueba si entra perpendicular a un lado: ángulo entre la dirección al centro y la normal del lado
             ang = normalizar(centro[3] + th)               # ángulo de la estación en el mundo
             phi = math.atan2(cy - y, cx - x)
             desalineado = (phi - ang + math.pi / 4) % (math.pi / 2) - math.pi / 4
             if abs(desalineado) > self.f3_max_desalineado:
                 self.f3_intentos += 1
-                self.get_logger().warn(f'FASE III: desalineado {math.degrees(desalineado):+.1f}° con la estación: me recoloco')
+                self.get_logger().warn(
+                    f'FASE III: desalineado {math.degrees(desalineado):+.1f}° con la estación: me recoloco')
                 self.escribir_log(x, y, th, f'FASE3_REALINEAR {math.degrees(desalineado):+.1f}', desvio, cx, cy)
                 if self.f3_intentos >= self.f3_intentos_max:
                     self.escribir_log(x, y, th, 'FASE_III_ABANDONADA')
@@ -1084,8 +1050,8 @@ class Fase1Node(Node):
                 self.estado = 'FIN'
             return
         self.f3_centro = (cx, cy)
-        # Solo lo que está donde debe estar una pata (a media diagonal del centro, ±5 cm): algo ajeno dentro de la estación
-        # no puede quedar fuera de la parada de emergencia
+        # Solo se guarda lo que está donde debe estar una pata (a media diagonal del centro, ±5 cm), para que algo ajeno
+        # dentro de la estación siga parando al robot
         semidiagonal = self.estacion_lado / math.sqrt(2)
         self.f3_patas = [p for p in pil.a_mundo(patas, (x, y, th), self.lidar_offset_x)
                          if abs(math.hypot(p[0] - cx, p[1] - cy) - semidiagonal) < 0.05]
@@ -1094,8 +1060,8 @@ class Fase1Node(Node):
         self.estado = 'ENTRAR'
 
     def entrar(self, x, y, th):
-        # Estado ENTRAR: recto hasta el centro medido, despacio. Solo gira sobre sí mismo al principio (lejos de las patas);
-        # dentro, corrige el rumbo avanzando. Para al llegar (phase3_tol) o si lo ha pasado. Devuelve (v, w).
+        # Estado ENTRAR: recto hasta el centro medido, despacio. Solo gira sobre sí mismo al principio, lejos de las
+        # patas; dentro, corrige el rumbo avanzando. Para al llegar (phase3_tol) o si lo ha pasado. Devuelve (v, w).
         tx, ty = self.f3_centro
         dx, dy = tx - x, ty - y
         dist = math.hypot(dx, dy)
@@ -1111,8 +1077,8 @@ class Fase1Node(Node):
         return min(max(self.k_lineal * dist, 0.02), self.f3_v), w
 
     def verificar3(self, x, y, th):
-        # Estado VERIFICAR3 (parado, dentro): las patas alrededor dan la distancia real del centro del robot al de la
-        # estación. Dentro, cada pata (a ~0.31 m) ocupa ~9 rayos: más de los 8 de la detección normal.
+        # Estado VERIFICAR3 (parado, dentro): las patas alrededor dan la distancia del robot al centro de la estación.
+        # Cada pata está a ~0.31 m y ocupa ~9 rayos, más de los 8 de la detección normal.
         r = self.juntar_patas(15)
         if r is None:
             return
@@ -1129,22 +1095,23 @@ class Fase1Node(Node):
             self.escribir_log(x, y, th, 'APARCADO_FUERA_DE_TOLERANCIA', error)
 
     def estacion_cuadrada(self):
-        # La estación de carga del enunciado (la cuadrada), si ya está confirmada (station_confirm_scans); si no, None
+        # Devuelve la estación cuadrada (la del enunciado) si ya está confirmada (station_confirm_scans), o None
         return next((e for e in self.estaciones if e['tipo'] == 'cuadrada' and e['vistas'] >= self.estacion_confirmar),
                     None)
 
     def fin_de_cobertura(self, x, y, th):
-        # Fase II, recién alcanzado el último punto de la cobertura (lo siguiente es P Base). Sin la estación cuadrada
-        # confirmada: la segunda cobertura (phase2_second_*), y si tampoco, ESTACION_NO_ENCONTRADA y a P Base igualmente.
+        # Se llama al alcanzar el último punto de la cobertura (lo siguiente es P Base). Si no hay estación cuadrada
+        # confirmada, hace la segunda cobertura (phase2_second_*) y, si tampoco, ESTACION_NO_ENCONTRADA y vuelve.
         if (self.fase != 'II' or self.i_objetivo >= len(self.objetivos) or self.objetivos[self.i_objetivo][0] != 'final'
                 or self.estacion_cuadrada() is not None):
             return
         if self.cobertura == 1 and self.fase2b_activa:
             self.cobertura = 2
-            nuevos = [(n, px, py, self.tol_waypoint) for n, px, py in zip(self.fase2b_nombres, self.fase2b_x, self.fase2b_y)]
+            nuevos = [(n, px, py, self.tol_waypoint)
+                      for n, px, py in zip(self.fase2b_nombres, self.fase2b_x, self.fase2b_y)]
             self.objetivos = self.objetivos[:self.i_objetivo] + nuevos + self.objetivos[self.i_objetivo:]
             self.anclas = self.anclas + list(self.fase2b_nombres)
-            self.obligatorios = self.fase2b_nombres[:1]   # como en empezar_fase2: replanificar llega al primer punto
+            self.obligatorios = self.fase2b_nombres[:1]   # como en empezar_fase2
             self.get_logger().warn(f'Sin estación cuadrada tras la cobertura: segunda cobertura {self.fase2b_nombres}')
             self.escribir_log(x, y, th, 'SEGUNDA_COBERTURA')
             if math.hypot(self.fase2b_x[0] - x, self.fase2b_y[0] - y) > self.plan_final_dist:
@@ -1154,7 +1121,7 @@ class Fase1Node(Node):
         self.escribir_log(x, y, th, 'ESTACION_NO_ENCONTRADA')
 
     def planificar_final(self, x, y, th, nombre='FINAL'):
-        # Planifica hasta el siguiente obligatorio (la pose final, o el primer punto de la fase II). Eventos del log:
+        # Planifica hasta el siguiente obligatorio (la pose final o el primer punto de la fase II). Eventos del log:
         # PLAN_<nombre> o <nombre>_SIN_CAMINO.
         inflado, segundos = self.replanificar(x, y)
         if inflado is None:
@@ -1169,8 +1136,8 @@ class Fase1Node(Node):
         self.escribir_log(x, y, th, f'PLAN_{nombre} inflado={inflado:.2f}', segundos)
 
     def inicio(self, x, y, th, ahora):
-        # Estado INICIO (robot parado): start_scans scans nuevos llenan la memoria de obstáculos (actualizar_obstaculos ya
-        # corre en cada ciclo); luego, plan desde la pose inicial. Sin camino: ESPERAR, que reintenta como siempre.
+        # Estado INICIO (robot parado): start_scans scans nuevos llenan la memoria de obstáculos y luego planifica desde
+        # la pose inicial. Sin camino, pasa a ESPERAR, que reintenta.
         if self.scan is not self.salida_ultimo_scan:
             self.salida_ultimo_scan = self.scan
             self.salida_scans += 1
@@ -1189,12 +1156,12 @@ class Fase1Node(Node):
         self.estado = 'GIRAR'
 
     def pose_inicial_lidar(self, x, y, th):
-        # Estado POSE_INICIAL (robot parado, antes de moverse): start_pose_scans scans nuevos, su mediana y la pose con
-        # las paredes del mapa (comprobar_pose.estimar), y revisar_pose_inicial decide qué se aplica. Si no vale, o si el
-        # giróscopo marca giro con el robot quieto, no se mueve: POSE_INICIAL_RECHAZADA y otra vez con scans nuevos.
+        # Estado POSE_INICIAL (robot parado, antes de moverse): con la mediana de start_pose_scans scans estima la pose
+        # con las paredes del mapa (comprobar_pose.estimar) y revisar_pose_inicial decide qué se aplica. Si no vale, o
+        # si el giróscopo marca giro con el robot quieto, no se mueve: POSE_INICIAL_RECHAZADA y repite con scans nuevos.
         msg = self.scan
         if msg is self.pi_ultimo_scan:
-            return                  # el timer va más rápido que el LiDAR: cada scan una vez
+            return                  # el timer va más rápido que el LiDAR: cada scan se usa una vez
         self.pi_ultimo_scan = msg
         r = np.array(msg.ranges, dtype=float)
         r[~np.isfinite(r) | (r < msg.range_min) | (r > msg.range_max)] = np.nan   # sin dato
@@ -1204,9 +1171,10 @@ class Fase1Node(Node):
         info = (msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
         xe, ye, the, resumen = cp.estimar((x, y, th), self.lidar_offset_x, cp.mediana_de_scans(self.pi_scans), info,
                                           self.caras, self.pi_eje_rumbo)
-        the -= self.lidar_yaw_offset     # las paredes dan el rumbo del LiDAR; el del robot es ese menos el desfase
+        the -= self.lidar_yaw_offset     # las paredes dan el rumbo del LiDAR: el del robot es ese menos el desfase
         nx, ny, nth, motivo = revisar_pose_inicial((x, y, th), (xe, ye, the), resumen, self.pi_eje_rumbo,
-                                                   self.pi_min_puntos, self.pi_max_rms, self.pi_max_corr, self.pi_max_ang)
+                                                   self.pi_min_puntos, self.pi_max_rms, self.pi_max_corr,
+                                                   self.pi_max_ang)
         giro = cp.aviso_giroscopo(self.pi_wz, self.pi_yaws)
         if not motivo and giro:
             motivo = 'giroscopo'
@@ -1236,12 +1204,12 @@ class Fase1Node(Node):
         self.estado = self.estado_tras_pose
 
     def replanificar(self, x, y, sustituir=False, largo=True):
-        # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
-        # anclas que queden por el camino; después sigue la lista original.
+        # Planifica desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las anclas
+        # que queden por el camino; después sigue la lista original.
         # Devuelve (inflado usado, segundos), o (None, segundos) si no hay camino ni con el inflado mínimo.
-        # sustituir: si el obligatorio está tapado, ir al punto libre más cercano a él (punto_sustituto).
-        # largo: si es False, un camino mucho más largo que el que quedaba (rodeo_largo) no vale: se prueba el inflado
-        # siguiente y, si ninguno da uno corto, no hay camino (se espera). Queda en self.rodeo_rechazado.
+        # sustituir: si el obligatorio está tapado, va al punto libre más cercano a él (punto_sustituto).
+        # largo: si es False, un camino mucho más largo que el que quedaba (rodeo_largo) no vale. Se prueba el inflado
+        # siguiente y, si ninguno da uno corto, no hay camino. El rodeo rechazado queda en self.rodeo_rechazado.
         t0 = time.perf_counter()
         resto = self.objetivos[self.i_objetivo:]
         k = next(k for k, o in enumerate(resto)
@@ -1254,8 +1222,8 @@ class Fase1Node(Node):
         self.n_replan += 1
 
         for inflado in self.inflados:
-            # Un punto obligatorio tapado por un obstáculo no se puede saltar: no hay camino (se espera), salvo que
-            # ya toque sustituirlo por el punto libre más cercano. Un ancla no obligatoria tapada se salta.
+            # Un obligatorio tapado no se puede saltar: no hay camino, salvo que ya toque sustituirlo por el punto libre
+            # más cercano. Un ancla no obligatoria tapada se salta.
             objetivo = anclas[-1]
             if pl.holgura_en(holgura, self.meta, objetivo[1], objetivo[2]) <= inflado:
                 if not (sustituir and objetivo[0] in self.obligatorios and objetivo[0] not in self.tapado_excluir):
@@ -1277,10 +1245,8 @@ class Fase1Node(Node):
                     break
                 puntos = pl.simplificar(celdas, holgura, self.meta, self.simp_paso, self.simp_tope, self.simp_margen)
                 if p == (x, y) and len(celdas) > 2 and pl.holgura_en(holgura, self.meta, x, y) <= inflado:
-                    # Sale de dentro del inflado (06/11, en C con un panel a 0.2 m): primero apartarse a la celda libre
-                    # más cercana (celdas[1]) y simplificar desde ahí. Si se simplifica desde el robot, la holgura exigida
-                    # sale de la de la salida (casi 0), el atajo va recto junto al obstáculo y ruta_bloqueada, que ve
-                    # que la ruta se le acerca, bloquea en bucle.
+                    # El robot está dentro del inflado: primero se aparta a la celda libre más cercana (celdas[1]) y
+                    # se simplifica desde ahí. Si no, la holgura exigida sería casi 0 y el atajo iría pegado a él.
                     puntos = [celdas[0]] + pl.simplificar(celdas[1:], holgura, self.meta, self.simp_paso,
                                                           self.simp_tope, self.simp_margen)
                 for m, (ix, iy) in enumerate(puntos[1:-1], start=1):
@@ -1300,9 +1266,9 @@ class Fase1Node(Node):
     # ---------- Corrección continua con el mapa ----------
 
     def corregir_con_mapa(self, x, y, th):
-        # Cada map_corr_every_scans scans nuevos: si el robot casi no gira (la lectura llega con retraso respecto a la
-        # pose) y aún no está en el tramo de la puerta (allí corrige ajuste_puerta), se compara el scan con el mapa.
-        # Dentro de corridor_corr_zone (el pasillo), con las paredes medidas con cinta (corregir_con_paredes).
+        # Cada map_corr_every_scans scans nuevos, si el robot casi no gira y aún no está en el tramo de la puerta (allí
+        # corrige ajuste_puerta), compara el scan con el mapa. Dentro de corridor_corr_zone (el pasillo) usa las paredes
+        # medidas con cinta (corregir_con_paredes).
         # Modo "activo": aplica la corrección, limitada por paso. Modo "sombra": solo la escribe en el log.
         # Devuelve la pose con la que seguir este ciclo.
         msg = self.scan
@@ -1340,8 +1306,8 @@ class Fase1Node(Node):
         return nx, ny, nth
 
     def corregir_con_paredes(self, x, y, th):
-        # En el pasillo: las paredes medidas con cinta (ajuste_paredes) en vez del mapa, que allí está mal (~0.3 m en Y).
-        # Solo los puntos a menos de corridor_corr_max_range: más lejos, el LDS da paredes con ±5 cm (bags del 06/11).
+        # En el pasillo usa las paredes medidas con cinta (ajuste_paredes) en vez del mapa, que allí está mal en Y.
+        # Solo cuentan los puntos a menos de corridor_corr_max_range: más lejos, el LiDAR da las paredes con ±5 cm.
         if self.pasillo_modo == 'apagado':
             return x, y, th
         msg = self.scan
@@ -1370,18 +1336,18 @@ class Fase1Node(Node):
     # ---------- Relocalización con las paredes ----------
 
     def reloc_adelantable(self, x, y):
-        # Bloqueo yendo al último waypoint antes de reloc_before (Door), a menos de reloc_on_block_dist de él: casi
-        # siempre es el marco de la puerta, visto dentro del hueco porque la Y llega mal (06/11: +0.37 m). Se relocaliza
-        # ahí mismo, una vez, en vez de esperar: la relocalización borra los obstáculos, calculados con la Y mala.
+        # Dice si un bloqueo, yendo al último waypoint antes de reloc_before (Door) y a menos de reloc_on_block_dist
+        # de él, se debe resolver relocalizando. Casi siempre es el marco de la puerta visto dentro del hueco porque
+        # la Y llega mal. Se relocaliza ahí mismo, una vez, y se borran los obstáculos calculados con la Y mala.
         i = self.i_objetivo
         if self.reloc_adelantada or i + 1 >= len(self.objetivos) or self.objetivos[i + 1][0] != self.reloc_antes_de:
             return False
         return math.hypot(self.objetivos[i][1] - x, self.objetivos[i][2] - y) < self.reloc_bloqueo_dist
 
     def reloc_reintentable(self, x, y):
-        # SIN_CAMINO cerca de la puerta (Door aún por delante, a menos de reloc_retry_dist) sin ninguna relocalización
-        # total: casi siempre la Y mala (06/11 14:36: RELOC_PARCIAL y SIN_CAMINO sin fin). Se relocaliza otra vez: si
-        # alguien tapaba el final de la canaleta y se ha apartado, ahora sale total.
+        # Dice si conviene relocalizar otra vez tras un SIN_CAMINO cerca de la puerta (Door por delante, a menos de
+        # reloc_retry_dist) sin ninguna relocalización total. Si alguien tapaba el final de la canaleta y se ha
+        # apartado, ahora puede salir total.
         if self.reloc_puerta_total or self.reloc_reintentos >= self.reloc_reintento_max:
             return False
         puerta = next((o for o in self.objetivos[self.i_objetivo:] if o[0] == self.reloc_antes_de), None)
@@ -1394,17 +1360,17 @@ class Fase1Node(Node):
 
     def relocalizar(self, x, y, th):
         # Estado RELOC (robot parado): junta reloc_scans scans nuevos y ajusta la pose con la pared de la puerta
-        # (ajuste_puerta): total (x, y, rumbo), parcial (x y rumbo) o nada (se sigue con la odometría).
+        # (ajuste_puerta): total (x, y y rumbo), parcial (x y rumbo) o nada (se sigue con la odometría).
         msg = self.scan
         if msg is self.reloc_ultimo_scan:
-            return                  # el timer va más rápido que el LiDAR: cada scan una vez
+            return                  # el timer va más rápido que el LiDAR: cada scan se usa una vez
         self.reloc_ultimo_scan = msg
         r = np.array(msg.ranges, dtype=float)
         r[~np.isfinite(r) | (r < msg.range_min) | (r > msg.range_max)] = np.nan   # sin dato
         self.reloc_scans_lista.append(r)
         if len(self.reloc_scans_lista) < self.reloc_n:
             return
-        # Mediana de los scans; cada lectura al mundo con la pose creída, y el ajuste a la pared de la puerta
+        # Mediana de los scans, cada lectura al mundo con la pose creída y ajuste a la pared de la puerta
         r = cp.mediana_de_scans(self.reloc_scans_lista)
         a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
         if self.reloc_tipo == 'Q':
@@ -1425,7 +1391,8 @@ class Fase1Node(Node):
             return
         if nivel == 'total':
             nx, ny, nth = x + dx, y + dy, normalizar(th + dth)
-            texto = f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}' + (f' Y={motivo}' if motivo else '')
+            texto = (f'dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f}{aviso}'
+                     + (f' Y={motivo}' if motivo else ''))
             self.get_logger().info(f'Relocalización: {texto} ({medido})')
             self.escribir_log(nx, ny, nth, f'RELOC {texto}', math.hypot(dx, dy))
         else:
@@ -1434,8 +1401,8 @@ class Fase1Node(Node):
             self.get_logger().warn(f'Relocalización parcial: {texto} ({medido})')
             self.escribir_log(nx, ny, nth, f'RELOC_PARCIAL {texto}', abs(dx))
         self.fijar_pose(nx, ny, nth)
-        self.obstaculos = {}        # sus posiciones se calcularon con la pose vieja: se vuelven a detectar
-        # Comprobación con el robot aún parado: el mismo ajuste desde la pose corregida debe dar casi 0
+        self.obstaculos = {}        # se calcularon con la pose vieja: se vuelven a detectar
+        # Comprobación con el robot parado: el mismo ajuste desde la pose corregida debe dar casi 0
         dx2, dy2, dth2, nivel2, motivo2, _ = self.ajustar_puerta(r, a, nx, ny, nth)
         mal = (nivel2 == '' or abs(dx2) > self.reloc_comprobar_dist or abs(dth2) > self.reloc_comprobar_ang
                or (nivel == 'total' and (nivel2 != 'total' or abs(dy2) > self.reloc_comprobar_dist)))
@@ -1446,7 +1413,7 @@ class Fase1Node(Node):
         self.estado = 'GIRAR'
 
     def relocalizar_q(self, r, a, x, y, th):
-        # Relocalización con la esquina de Q (ajuste_esquina): x, y y rumbo, o nada. Después el robot vuelve a ir a Q.
+        # Relocalización con la esquina de Q (ajuste_esquina): x, y y rumbo, o nada. Después el robot vuelve a Q.
         def texto_de(dx, dy, dth, d):
             return (f"dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f} nx={d['nx']} ny={d['ny']}"
                     + (f" dth_x={math.degrees(d['dth_x']):+.2f} dth_y={math.degrees(d['dth_y']):+.2f}"
@@ -1476,11 +1443,12 @@ class Fase1Node(Node):
         px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
         py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
         return ajuste_esquina(px, py, x, y, self.reloc_q_pared_x, self.reloc_q_pared_y, self.reloc_q_banda,
-                              self.reloc_q_alcance, self.reloc_q_max_rms, self.reloc_q_min_puntos, self.reloc_q_max_corr,
-                              self.reloc_q_max_ang, self.reloc_q_max_dif, self.reloc_q_eje_rumbo)
+                              self.reloc_q_alcance, self.reloc_q_max_rms, self.reloc_q_min_puntos,
+                              self.reloc_q_max_corr, self.reloc_q_max_ang, self.reloc_q_max_dif,
+                              self.reloc_q_eje_rumbo)
 
     def ajustar_puerta(self, r, a, x, y, th):
-        # Lecturas (r, ángulos a) al mundo con la pose (x, y, th) y ajuste_puerta con los parámetros del yaml
+        # Pasa las lecturas (r, ángulos a) al mundo con la pose (x, y, th) y llama a ajuste_puerta con los parámetros
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
         ok = ~np.isnan(r)
@@ -1492,8 +1460,8 @@ class Fase1Node(Node):
                              self.reloc_max_ang, self.reloc_fondo_marco, self.reloc_fin_canaleta)
 
     def fijar_pose(self, x, y, th):
-        # Que pose_mundo() pase a dar (x, y, th) sin tocar lo integrado desde la salida (x_rel, y_rel, th_rel):
-        # se mueve el origen de la odometría en el mundo (pose_inicial).
+        # Hace que pose_mundo() dé (x, y, th) sin tocar lo integrado desde la salida (x_rel, y_rel, th_rel), moviendo
+        # el origen de la odometría en el mundo (pose_inicial).
         thi = normalizar(th - self.th_rel)
         xi = x - (math.cos(thi) * self.x_rel - math.sin(thi) * self.y_rel)
         yi = y - (math.sin(thi) * self.x_rel + math.cos(thi) * self.y_rel)
@@ -1502,7 +1470,7 @@ class Fase1Node(Node):
     # ---------- Control ----------
 
     def control_loop(self):
-        # 1. Sin datos frescos de algún sensor: parada total
+        # Sin datos frescos de algún sensor: parada total
         if (self.sensor_caducado(self.t_odom) or self.sensor_caducado(self.t_scan)
                 or (self.usar_imu and self.sensor_caducado(self.t_imu))):
             self.publicar_vel(0.0, 0.0)
@@ -1524,25 +1492,27 @@ class Fase1Node(Node):
 
         x, y, th = self.corregir_con_mapa(x, y, th)
 
-        # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
+        # Obstáculos nuevos: si bloquean la ruta, para y pasa a ESPERAR
         ahora_s = self.get_clock().now().nanoseconds * 1e-9
-        if self.estado != 'POSE_INICIAL':       # con la pose de salida aún sin corregir, nada a la memoria ni al log
+        if self.estado != 'POSE_INICIAL':       # con la pose de salida sin corregir, no se guarda nada
             self.actualizar_obstaculos(x, y, th, ahora_s)
             self.detectar_pilares(x, y, th, ahora_s)
         if self.estado in ('GIRAR', 'AVANZAR'):
             bloqueo = self.ruta_bloqueada(x, y)
             if bloqueo is not None and self.reloc_adelantable(x, y):
                 self.reloc_adelantada = True
-                self.get_logger().warn(f'Bloqueo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}) junto a la puerta: relocalizo aquí')
+                self.get_logger().warn(
+                    f'Bloqueo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}) junto a la puerta: relocalizo aquí')
                 self.escribir_log(x, y, th, 'RELOC_ADELANTADA', None, bloqueo[0], bloqueo[1])
                 self.empezar_reloc('puerta')
             elif bloqueo is not None:
-                self.get_logger().warn(f'Ruta bloqueada por un obstáculo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}): espero')
+                self.get_logger().warn(
+                    f'Ruta bloqueada por un obstáculo en ({bloqueo[0]:.2f}, {bloqueo[1]:.2f}): espero')
                 self.estado = 'ESPERAR'
                 self.t_espera = ahora_s
                 self.escribir_log(x, y, th, 'BLOQUEO', None, bloqueo[0], bloqueo[1])
 
-        # 3. Lo que querría hacer la máquina de estados
+        # Lo que quiere hacer la máquina de estados
         if self.estado == 'ESPERAR':
             v, w = 0.0, 0.0
             self.esperar(x, y, th, ahora_s)
@@ -1566,8 +1536,8 @@ class Fase1Node(Node):
         else:
             v, w = self.maquina_estados(x, y, th)
 
-        # 4. Parada de emergencia, por encima de cualquier estado (y del planificador). Solo anula la lineal:
-        #    si también bloqueara el giro, mirando a una pared cercana nunca podría girarse para salir.
+        # Parada de emergencia, por encima de cualquier estado. Solo anula la velocidad lineal: si también bloqueara el
+        # giro, mirando a una pared cercana el robot nunca podría girar para salir.
         obstaculo = self.obstaculo_delante(x, y, th) if v > 0.0 else None
         if obstaculo is not None:
             v = 0.0
@@ -1585,19 +1555,19 @@ class Fase1Node(Node):
         self.w_anterior = w
         self.v_anterior = v
 
-        # 5. Fila periódica del log
+        # Fila periódica del log
         ahora = self.get_clock().now()
         if self.t_ultimo_log is None or (ahora - self.t_ultimo_log).nanoseconds * 1e-9 >= self.log_period:
             self.t_ultimo_log = ahora
             self.escribir_log(x, y, th, '')
 
     def maquina_estados(self, x, y, th):
-        # Devuelve (v, w) según el estado, y cambia de estado y de objetivo cuando toca.
+        # Devuelve (v, w) según el estado y cambia de estado y de objetivo cuando toca
         if self.estado == 'FIN':
             return 0.0, 0.0
 
         if self.estado == 'PAUSA':
-            # Entre la fase I y la II (o la II y la III), parado
+            # Entre una fase y la siguiente, parado
             if self.get_clock().now().nanoseconds * 1e-9 - self.t_pausa >= self.fase2_espera:
                 if self.fase == 'I':
                     self.empezar_fase2(x, y, th)
@@ -1608,7 +1578,7 @@ class Fase1Node(Node):
         if self.estado == 'ORIENTAR':
             error = normalizar(self.pose_final[2] - th)
             if abs(error) < self.tol_final_yaw and self.fase == 'III':
-                # Fase III: delante de la estación, mirando a su centro. Ahora, parado, medir sus patas (MEDIR3)
+                # Fase III: delante de la estación, mirando a su centro. Ahora mide sus patas parado (MEDIR3)
                 self.get_logger().info('Delante de la estación: mido sus patas')
                 self.escribir_log(x, y, th, 'FASE3_DELANTE', error)
                 self.estado = 'MEDIR3'
@@ -1624,14 +1594,14 @@ class Fase1Node(Node):
                 return 0.0, 0.0
             return 0.0, limitar(self.k_angular * error, self.max_w)
 
-        # LLEGADO: se comprueba antes que nada, esté girando o avanzando
+        # La llegada al objetivo se comprueba antes que nada, esté girando o avanzando
         nombre, ox, oy, tol = self.objetivos[self.i_objetivo]
         dist = math.hypot(ox - x, oy - y)
-        # También Q~. Con reloc_q_at "" no se relocaliza nunca (06/11: '' coincidía con cualquier waypoint sin sustituto)
+        # Cuenta también el sustituto de Q (Q~). Con reloc_q_at "" no se relocaliza nunca
         es_q = bool(self.reloc_q_en) and (nombre == self.reloc_q_en
                                           or self.sustitutos.get(nombre, ('',))[0] == self.reloc_q_en)
         if dist < tol and es_q and self.reloc_q_hechas < self.reloc_q_veces:
-            # En Q: relocalizar con la esquina antes de darlo por alcanzado; luego se vuelve a ir a Q con la pose nueva
+            # En Q se relocaliza con la esquina antes de darlo por alcanzado y luego se vuelve a Q con la pose nueva
             self.reloc_q_hechas += 1
             self.get_logger().info(f'Relocalizo en {nombre} ({self.reloc_q_hechas}/{self.reloc_q_veces}): '
                                    f'junto {self.reloc_n} scans parado')
@@ -1651,16 +1621,17 @@ class Fase1Node(Node):
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
             est = self.estacion_cuadrada() if self.estado == 'ORIENTAR' and self.fase == 'II' else None
             if est is not None:
-                # En P Base, mirando a la estación encontrada (el enunciado no da θ de P Base; así empieza la fase III)
+                # En P Base mira a la estación encontrada, porque el enunciado no da el ángulo de P Base
                 th_est = math.atan2(est['y'] - y, est['x'] - x)
                 self.pose_final = [self.pose_final[0], self.pose_final[1], th_est]
-                self.escribir_log(x, y, th, f'THETA_HACIA_ESTACION {math.degrees(th_est):+.1f}', None, est['x'], est['y'])
-            # Pose final asignada por el profesor (06/11: puede no ser Q). Si queda lejos del último obligatorio, se
-            # planifica hasta ella (antes, línea recta: podía cruzar una pared). Sin camino: ESPERAR, que reintenta.
+                self.escribir_log(x, y, th, f'THETA_HACIA_ESTACION {math.degrees(th_est):+.1f}', None,
+                                  est['x'], est['y'])
+            # La pose final asignada puede no ser Q: si queda lejos del último obligatorio, se planifica hasta ella.
+            # Sin camino pasa a ESPERAR, que reintenta.
             sig = self.objetivos[self.i_objetivo] if self.i_objetivo < len(self.objetivos) else None
             if sig is not None and sig[0] == 'final' and math.hypot(sig[1] - x, sig[2] - y) > self.plan_final_dist:
                 self.planificar_final(x, y, th)
-            # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno replanificado)
+            # Último waypoint antes de reloc_before (Door), se llame como se llame (también uno de un replan)
             if self.i_objetivo < len(self.objetivos) and self.objetivos[self.i_objetivo][0] == self.reloc_antes_de:
                 self.empezar_reloc('puerta')
                 self.get_logger().info(f'Relocalizo en {nombre}: junto {self.reloc_n} scans parado')
@@ -1670,14 +1641,14 @@ class Fase1Node(Node):
         error = normalizar(math.atan2(oy - y, ox - x) - th)
         w = limitar(self.k_angular * error, self.max_w)
 
-        # GIRAR: sobre sí mismo hasta quedar casi alineado (el TB3 no puede ir de lado)
+        # GIRAR: sobre sí mismo hasta quedar casi alineado, porque el robot no puede ir de lado
         if self.estado == 'GIRAR':
             if abs(error) >= self.angulo_girar:
                 return 0.0, w
             self.estado = 'AVANZAR'
 
-        # AVANZAR: v proporcional a la distancia y w corrige el rumbo.
-        # Umbral de salida (30°) mayor que el de entrada (10°): histéresis, para no alternar en cada ciclo.
+        # AVANZAR: v proporcional a la distancia y w corrige el rumbo. El umbral de salida (30°) es mayor que el de
+        # entrada (10°) para no alternar de estado en cada ciclo.
         if abs(error) > self.angulo_reorientar:
             self.estado = 'GIRAR'
             return 0.0, w
@@ -1693,7 +1664,7 @@ class Fase1Node(Node):
         self.publisher.publish(msg)
 
     def yaws_log(self):
-        # Rumbo según /odom y según el giróscopo, ambos en el sistema del mundo (para compararlos)
+        # Rumbo según /odom y según el giróscopo, ambos en el sistema del mundo, para compararlos
         thi = self.pose_inicial[2]
         return round(normalizar(thi + self.yaw_odom), 3), round(normalizar(thi + self.yaw_imu), 3)
 
@@ -1707,8 +1678,7 @@ class Fase1Node(Node):
 
 
 def main(args=None):
-    # Sin el manejador de Ctrl+C de rclpy: así el contexto de ROS sigue vivo en el finally
-    # y la velocidad cero llega de verdad al robot (con el de la plantilla se puede perder).
+    # Sin el manejador de Ctrl+C de rclpy, el contexto de ROS sigue vivo en el finally y la velocidad cero llega
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = Fase1Node()
     try:

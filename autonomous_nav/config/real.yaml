@@ -1,52 +1,34 @@
-# Parámetros para el robot REAL (tercer --params-file). Orden de los ficheros, cada uno
-# sobrescribe al anterior:
-#   fase1.yaml, fase1_ruta.yaml, real.yaml (y, si se usa, initial_pose_corregida.yaml el último: ya no hace falta).
-# A 0.08 m/s la ruta completa dura unos 4-5 min.
+# Parámetros para el robot real. Se pasa después de fase1.yaml y fase1_ruta.yaml, y sobrescribe lo que se repita.
 fase1_node:
   ros__parameters:
     use_sim_time: false
-    # 05/11: a 0.12 m/s el rumbo derivaba 3-5° en la ruta (crece en marcha y salta en los giros; parado, no).
-    #   A 0.08 m/s las A->B salieron con < 0.5°. 06/11: con la corrección con el mapa activa, 0.12 va bien (A -> Q, 3:36).
-    max_linear_speed: 0.20
-    max_angular_speed: 0.4       # 0.8 en fase1.yaml. k_angular (1.5) no cambia: solo satura los giros de más de ~15°
-    tol_mandatory: 0.02          # con 0.03 se paraba ~2.7 cm antes de B. Si da vueltas cerca de un punto, volver a 0.03
-    tol_final_yaw: 0.03
-    # Red de seguridad (05/11): en la ruta completa una persona cruzó a 1 m de E y el robot no la olvidó en 60 s
-    # (los rayos daban 0.0, que antes no borraba, y con 30 s de memoria la gente que pasaba reiniciaba la cuenta).
-    obstacle_memory_time: 8.0
-    # 05/11: en la ruta 4 se paró a 1.65 m de un obstáculo. Con 0.40 m de ruta por delante (y 0.25 de lado) se para
-    #   a 0.44-0.65 m del obstáculo, fuera de los 0.35 (inflado + margen) que pide el planificador.
-    block_lookahead: 0.40
-    obstacle_wait_time: 2.0
-    # Rumbo de /odom (integra en el robot, no depende de la WiFi). Prueba del 05/11: 4 vueltas,
-    # error -1.3° (odom) y -1.9° (imu) frente a las paredes. yaw_imu se sigue escribiendo en el log.
-    # Ojo: el driver del TB3 (odometry.use_imu: true) saca el rumbo de /odom del IMU de la OpenCR, no de las
-    # ruedas. Si se inclina o se sacude el robot, ese rumbo salta (05/11: 131° al cogerlo con la mano).
+    # Más lento que en Gazebo: a velocidad alta el rumbo derivaba unos grados a lo largo de la ruta
+    max_linear_speed: 0.20       # m/s
+    max_angular_speed: 0.4       # rad/s, más suave que en fase1.yaml. Solo satura los giros de más de ~15°
+    tol_mandatory: 0.02          # m. Con 0.03 el robot se paraba unos 2.7 cm antes de B
+    tol_final_yaw: 0.03          # rad
+    # Si alguien cruza por delante, el robot lo olvida pronto y no se queda bloqueado
+    obstacle_memory_time: 8.0    # s
+    # Con 0.40 m de ruta vigilada, el robot se para a 0.44-0.65 m del obstáculo, fuera del inflado
+    block_lookahead: 0.40        # m
+    obstacle_wait_time: 2.0      # s
+    # El rumbo de /odom se integra dentro del robot, así que un corte de WiFi no pierde giro. El driver lo saca del
+    # IMU de la OpenCR: si se coge el robot con la mano, ese rumbo salta
     use_imu_yaw: false
-    # Desfase de rumbo del LiDAR: 0. Historia (05/11): con el rumbo de las dos paredes de A salió 0.026 y luego 0.019
-    # (dos A->B con cinta). Pero las dos paredes difieren 1.76° entre sí (no son perpendiculares) y el rumbo de la
-    # pared izquierda sola coincide con el real (±0.1°): el montaje del LiDAR está bien. Ahora comprobar_pose saca
-    # el rumbo solo de la pared izquierda (pose_heading_axis "Y" en fase1.yaml).
-    lidar_yaw_offset: 0.0
-    # Corrección con el mapa (06/11): empezar en "sombra"; pasar a "activo" cuando se haya comprobado con una ruta A->E.
-    map_corr_mode: "activo"
-    # 05/11: la Y creída llega a la puerta con hasta ~0.42 m de más (rutas 3 y 5): 0.45 quedaba justo.
-    # 06/11 tarde: dy -0.442, -0.462, -0.471, -0.490 (crece con la velocidad): 0.55 queda justo otra vez.
-    reloc_max_dy: 0.65
-    # Esquina de Q medida con cinta (06/11) desde la cruz de Q (8.970, 14.497): 0.60 m a la pared de delante (+X) y 0.50 m
-    # a la de la derecha (-Y). El mapa dice 9.530 y 13.780: mal en Y (~0.22 m). El LiDAR desde Q ve 0.608 y ~0.49.
-    reloc_q_wall_x: 9.570
-    reloc_q_wall_y: 13.997
-    # Pasillo (07/11, bags del 06/11): la pose se corrige con la pared del extintor, medida con cinta en Y 17.15 desde Q, R
-    # y P Base (el mapa dice 16.90). Solo la Y: corregir el rumbo con ella lo movía 1-2° contra el de la esquina de Q (y el
-    # del IMU es bueno: -0.3° en 200 s), y el fondo (X 9.57 en Q) no es perpendicular: a 1.5 m de Q ya está a ~8 cm de 9.57.
-    # Resultado (scripts/evaluar_pasillo.py): R a la cinta 8.7/9.4/1.2 cm -> 7.3/9.5/1.5, y en P Base ve los ~15 cm que
-    # quedó de la cruz (LiDAR parado allí: 1.30 m a la pared; cinta: 1.45). Añadir aquí las que se midan (extremo X -0.55).
+    # El montaje del LiDAR está bien alineado: el rumbo medido contra la pared izquierda coincide con el real
+    lidar_yaw_offset: 0.0        # rad
+    map_corr_mode: "activo"      # corrección con el mapa de distancias
+    # La Y estimada llega a la puerta con un error que crece con la velocidad, hasta unos 0.5 m
+    reloc_max_dy: 0.65           # m
+    # Esquina de Q medida con cinta desde la cruz de Q: el mapa está mal en Y (unos 0.22 m)
+    reloc_q_wall_x: 9.570        # m, pared de delante
+    reloc_q_wall_y: 13.997       # m, pared de la derecha
+    # Pared larga del pasillo, medida con cinta (el mapa dice 16.90). Solo se corrige la Y: el rumbo del IMU es mejor
+    # y la pared del fondo no es perpendicular a ella
     corridor_corr_mode: "activo"
     corridor_wall_axis: ["y"]
-    corridor_wall_value: [17.15]
-    corridor_wall_from: [-0.55]
-    corridor_wall_to: [9.57]
-    # Pose de salida con el LiDAR al arrancar (07/11): ya no hace falta comprobar_pose --escribir (sigue valiendo para
-    # mirar los avisos antes). Eventos POSE_INICIAL / POSE_INICIAL_RECHAZADA en el Mission Log.
+    corridor_wall_value: [17.15] # m
+    corridor_wall_from: [-0.55]  # m
+    corridor_wall_to: [9.57]     # m
+    # Corrige la pose de salida con el LiDAR al arrancar
     start_pose_check: true

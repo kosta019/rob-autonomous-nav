@@ -1,8 +1,6 @@
-# Planificador global: Distance Transform con costes (teoría, diapositivas 16-18).
-# Es un Dijkstra lanzado desde el objetivo sobre un mapa de costes; el camino sale bajando
-# desde el inicio hacia el vecino con menor distancia.
-# Solo numpy y la librería estándar: estas funciones se reutilizan dentro de fase1_node (paso 3).
-#
+# Planificador global: Distance Transform con costes. Es un Dijkstra lanzado desde el objetivo sobre un mapa de
+# costes; el camino sale bajando desde el inicio hacia el vecino con menor distancia.
+# Solo usa numpy y la librería estándar, y también lo usa fase1_node para replanificar.
 # Rejilla: la fila i va con X y la columna j con Y, como en el mapa (fila = 100·X + 71).
 # 'meta' es un diccionario con la resolución (m/celda) y el origen: el (X, Y) del borde de la celda (0, 0).
 import heapq
@@ -27,7 +25,7 @@ def celda_a_mundo(i, j, meta):
 
 
 def holgura_por_bloques(holgura_fina, factor):
-    # Holgura de cada celda gruesa = el MÍNIMO de sus factor x factor píxeles (lo conservador).
+    # Holgura de cada celda gruesa: el mínimo de sus factor x factor píxeles (lo más conservador).
     # Si el mapa no es múltiplo de factor, el borde se rellena con 0 (ocupado).
     filas, cols = holgura_fina.shape
     F = -(-filas // factor) * factor
@@ -67,7 +65,7 @@ def mapa_de_costes(holgura, inflado, holgura_objetivo, ganancia):
 
 
 def celda_libre_mas_cercana(coste, celda):
-    # Si la celda cae dentro del inflado (o fuera del mapa), la celda libre más cercana; None si no hay ninguna
+    # Si la celda cae dentro del inflado (o fuera del mapa), devuelve la celda libre más cercana, o None si no hay.
     filas, cols = coste.shape
     i, j = celda
     if 0 <= i < filas and 0 <= j < cols and math.isfinite(coste[i, j]):
@@ -82,10 +80,8 @@ def celda_libre_mas_cercana(coste, celda):
 
 def distance_transform(coste, objetivo, resolucion, inicio=None):
     # Dijkstra desde el objetivo: dist[c] = coste acumulado desde la celda c hasta el objetivo.
-    # Cada paso cuesta: coste de la celda destino de la expansión (la vecina) x longitud del paso.
-    # (Probamos también a cobrar la celda hacia la que va el robot: las rutas casi no cambian,
-    #  pero así se reproducen los valores de referencia de la tarea.)
-    # Si se da el inicio, se para al alcanzarlo (el resto del mapa no hace falta para ese camino).
+    # Cada paso cuesta el coste de la celda vecina por la longitud del paso.
+    # Si se da el inicio, se para al alcanzarlo, porque el resto del mapa no hace falta.
     filas, cols = coste.shape
     c = coste.tolist()                      # listas de Python: en este bucle son mucho más rápidas que numpy
     dist = [[math.inf] * cols for _ in range(filas)]
@@ -112,8 +108,8 @@ def distance_transform(coste, objetivo, resolucion, inicio=None):
 
 
 def extraer_camino(dist, inicio):
-    # Bajar desde el inicio, siempre hacia el vecino con menor distancia, hasta el objetivo (dist = 0).
-    # None si desde el inicio no se llega al objetivo.
+    # Baja desde el inicio hacia el vecino con menor distancia hasta el objetivo (dist = 0).
+    # Devuelve None si desde el inicio no se llega.
     filas, cols = dist.shape
     i, j = inicio
     if not math.isfinite(dist[i, j]):
@@ -133,7 +129,7 @@ def extraer_camino(dist, inicio):
 
 
 def planificar_tramo(coste, meta, p, q):
-    # Camino de celdas de p a q (en el mundo), como lista de puntos (x, y). None si no hay camino.
+    # Camino de celdas de p a q (en el mundo), como lista de puntos (x, y), o None si no hay camino.
     # El primer y el último punto son p y q exactos, aunque p caiga dentro del inflado.
     inicio = celda_libre_mas_cercana(coste, mundo_a_celda(p[0], p[1], meta))
     objetivo = celda_libre_mas_cercana(coste, mundo_a_celda(q[0], q[1], meta))
@@ -169,9 +165,8 @@ def holgura_segmento(holgura, meta, p, q, paso):
 
 
 def simplificar(puntos, holgura, meta, paso, holgura_max, margen):
-    # De la escalera de celdas a pocos waypoints. Desde el punto i, saltar al j más lejano
-    # tal que el segmento i-j tenga una holgura >= min(holgura_max, holgura del camino entre i y j) - margen.
-    # Es decir: el atajo puede acercarse a las paredes, como mucho, lo que ya se acercaba el camino.
+    # Reduce la escalera de celdas a pocos waypoints. Desde el punto i salta al j más lejano cuyo segmento i-j tenga
+    # holgura >= min(holgura_max, holgura del camino entre i y j) - margen: el atajo no se acerca más a las paredes.
     h = np.array([holgura_en(holgura, meta, x, y) for x, y in puntos])
     resultado = [puntos[0]]
     i = 0

@@ -1,10 +1,7 @@
-# Herramienta de montaje: con el robot PARADO, estima con el LiDAR su pose real (rumbo y posición)
-# comparando el /scan con las paredes del mapa, y dice cuánto se desvía de initial_pose.
-# No publica nada ni toca la navegación.
-#
-# Uso:  ros2 run autonomous_nav comprobar_pose config/fase1.yaml [config/real.yaml ...] [--escribir]
-#       [--ros-args -p use_sim_time:=true]
-# Los .yaml son los mismos que se pasan a fase1_node (cada uno sobrescribe al anterior): de ellos salen
+# Herramienta de montaje: con el robot parado, estima con el LiDAR su pose real (rumbo y posición) comparando
+# el /scan con las paredes del mapa, y dice cuánto se desvía de initial_pose. No publica nada.
+# Uso: ros2 run autonomous_nav comprobar_pose config/fase1.yaml [config/real.yaml ...] [--escribir]
+# Los .yaml son los mismos que se pasan a fase1_node (cada uno sobrescribe al anterior); de ellos salen
 # initial_pose y lidar_offset_x. Las rutas son relativas a la carpeta actual.
 # Misma estructura que ref/go_stop.py: una clase Node que se suscribe a /scan, y main().
 import math
@@ -34,8 +31,8 @@ RMS_MAX = 0.02                  # m, aviso
 CORR_MAX_POS = 0.15             # m, aviso
 CORR_MAX_ANG = 5.0              # grados, aviso
 ECOS_MAX = 0.05                 # fracción de scans con lecturas a menos de obstacle_min_range: aviso (ventana sucia)
-GIRO_W_MAX = 0.01               # rad/s: media de |w| de /imu con el robot quieto por encima, aviso (giróscopo)
-GIRO_DERIVA_MAX = 0.2           # grados: cambio del rumbo de /odom en la ventana por encima, aviso (giróscopo)
+GIRO_W_MAX = 0.01               # rad/s: media de |w| de /imu con el robot quieto por encima de esto, aviso (giróscopo)
+GIRO_DERIVA_MAX = 0.2           # grados: cambio del rumbo de /odom en la ventana por encima de esto, aviso
 
 
 def normalizar(a):
@@ -53,7 +50,7 @@ class ComprobarPose(Node):
         self.info = None   # (angle_min, angle_increment, range_min, range_max)
         qos_profile_b = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=10)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, qos_profile_b)
-        # Mientras se juntan los scans, también /imu y /odom: con el robot quieto no deben marcar giro
+        # Mientras se juntan los scans se guardan también /imu y /odom, que con el robot quieto no deben marcar giro
         self.wz = []      # velocidad angular z de /imu
         self.yaws = []    # rumbo de /odom
         self.create_subscription(Imu, '/imu', self.imu_callback, qos_profile_b)
@@ -79,9 +76,8 @@ class ComprobarPose(Node):
 
 
 def aviso_giroscopo(wz, yaws):
-    # Con el robot quieto, /imu y el rumbo de /odom (que sale del IMU) no deben marcar giro. La OpenCR calibra
-    # el giróscopo al encenderse: si se encendió moviendo el robot, marca un giro falso (05/11: 0.63 rad/s).
-    # Devuelve el texto del aviso, o None si todo está bien.
+    # Con el robot quieto, /imu y el rumbo de /odom (que sale del IMU) no deben marcar giro. Si el robot se encendió
+    # moviéndose, el giróscopo se calibra mal y marca un giro falso. Devuelve el texto del aviso, o None si va bien.
     if not wz or not yaws:
         return 'no llega /imu o /odom: no puedo comprobar el giróscopo'
     w_media = float(np.mean(np.abs(wz)))
@@ -93,8 +89,8 @@ def aviso_giroscopo(wz, yaws):
 
 
 def fraccion_con_ecos(scans, dist):
-    # Fracción de scans con alguna lectura válida (no nan) a menos de dist del LiDAR. Con el robot quieto y
-    # nada alrededor, solo pueden ser ecos del propio robot: la ventana del LiDAR sucia (05/11).
+    # Fracción de scans con alguna lectura válida a menos de dist del LiDAR. Con el robot quieto y nada alrededor,
+    # solo pueden ser ecos del propio robot (la ventana del LiDAR sucia).
     if not scans:
         return 0.0
     with np.errstate(invalid='ignore'):
@@ -113,7 +109,7 @@ def mediana_de_scans(scans):
 
 
 def cargar_parametros(rutas):
-    # Fusiona fase1_node: ros__parameters de cada fichero, en orden
+    # Junta los ros__parameters de fase1_node de cada fichero, en orden
     p = {}
     for ruta in rutas:
         with open(ruta) as f:
@@ -122,7 +118,7 @@ def cargar_parametros(rutas):
 
 
 def cargar_caras():
-    # Cuatro caras por rectángulo: eje 0 = cara X (x = c, y en [lo, hi]); eje 1 = cara Y (y = c, x en [lo, hi])
+    # Cuatro caras por rectángulo: eje 0 es una cara X (x = c, y en [lo, hi]) y eje 1 una cara Y (y = c, x en [lo, hi])
     ruta = os.path.join(get_package_share_directory('autonomous_nav'), 'maps', 'paredes.yaml')
     with open(ruta) as f:
         w = yaml.safe_load(f)
@@ -136,8 +132,8 @@ def cargar_caras():
 
 
 def trazar(L, ang, caras):
-    # Para cada rayo (ángulo en el mundo, desde L): distancia esperada y cara que golpea (-1 si ninguna
-    # o si cae a menos de ESQUINA del extremo de la cara)
+    # Para cada rayo (ángulo en el mundo, desde L) calcula la distancia esperada y la cara que golpea (-1 si ninguna
+    # o si cae a menos de ESQUINA del extremo de la cara).
     dx = np.cos(ang)[:, None]
     dy = np.sin(ang)[:, None]
     x_es_perp = (caras['eje'] == 0)[None, :]
@@ -161,9 +157,9 @@ def trazar(L, ang, caras):
 
 
 def ajustar(x, y, th, off, p, cara, ok, caras, eje_rumbo=''):
-    # Con los inliers: nuevo rumbo (recta de cada cara) y nueva posición. p = puntos en el sistema del LiDAR.
-    # eje_rumbo: el rumbo sale solo de las caras de ese eje ('Y' = rectas y = c, como la pared izquierda; '' = todas).
-    # Las paredes de la sala no son perpendiculares entre sí (05/11: 1.76° entre el fondo y la izquierda).
+    # Calcula con los inliers el nuevo rumbo (recta de cada cara) y la nueva posición. p: puntos en el sistema del LiDAR.
+    # eje_rumbo: el rumbo sale solo de las caras de ese eje ('Y' son las rectas y = c; '' = todas), porque las paredes
+    # de la sala no son perpendiculares entre sí.
     usadas = [f for f in np.unique(cara[ok]) if np.sum(ok & (cara == f)) >= PUNTOS_MIN]
     para_rumbo = [f for f in usadas if not eje_rumbo or 'XY'[int(caras['eje'][f])] == eje_rumbo]
     difs, pesos = [], []
@@ -205,7 +201,7 @@ def ajustar(x, y, th, off, p, cara, ok, caras, eje_rumbo=''):
 
 
 def estimar(pose, off, r, info, caras, eje_rumbo=''):
-    # Tres iteraciones con compuerta cada vez más estrecha; cada una traza los rayos desde la pose nueva
+    # Tres iteraciones con una compuerta cada vez más estrecha; cada una traza los rayos desde la pose nueva
     angulo_min, inc, _, _ = info
     a = angulo_min + np.arange(len(r)) * inc            # ángulo de cada rayo en el sistema del LiDAR
     valido = ~np.isnan(r)
@@ -250,9 +246,11 @@ def informar(pose_ini, pose, resumen):
     if abs(dth) < 0.05:
         print('Rumbo: coincide con initial_pose.')
     elif dth > 0:
-        print(f'El robot está girado {dth:.1f} grados a la izquierda de initial_pose: gíralo {dth:.1f} grados a la derecha.')
+        print(f'El robot está girado {dth:.1f} grados a la izquierda de initial_pose: '
+              f'gíralo {dth:.1f} grados a la derecha.')
     else:
-        print(f'El robot está girado {-dth:.1f} grados a la derecha de initial_pose: gíralo {-dth:.1f} grados a la izquierda.')
+        print(f'El robot está girado {-dth:.1f} grados a la derecha de initial_pose: '
+              f'gíralo {-dth:.1f} grados a la izquierda.')
     print(f'Está {texto_mov(dx, dy, ti)} respecto a initial_pose:')
     print(f'  muévelo {texto_mov(-dx, -dy, ti)}.')
     print('Alternativa recomendada: no mover el robot y usar el fichero corregido (--escribir).')
@@ -304,9 +302,8 @@ def main(args=None):
             return
         r = mediana_de_scans(node.scans)
         x, y, th, resumen = estimar(pose_ini, off, r, node.info, caras, p.get('pose_heading_axis', ''))
-        # Las paredes dan el rumbo del LiDAR. Si está montado girado (lidar_yaw_offset, positivo = girado
-        # a la izquierda), el rumbo del robot es ese menos el desfase. x, y se dejan igual: el error es
-        # |lidar_offset_x| * sin(desfase), menos de 1 mm.
+        # Las paredes dan el rumbo del LiDAR. Si está montado girado (lidar_yaw_offset), el rumbo del robot es ese
+        # menos el desfase. x e y no cambian: el error es menor de 1 mm.
         desfase = p.get('lidar_yaw_offset', 0.0)
         if desfase != 0.0:
             print(f'Rumbo del LiDAR {math.degrees(th):.2f} grados; restando lidar_yaw_offset '
@@ -323,7 +320,7 @@ def main(args=None):
             print(f'AVISO: {giro}')
             avisos.append('giróscopo')
         if escribir and avisos:
-            # Con avisos la estimación no es fiable: mejor no dejar un fichero que se use sin mirar
+            # Con avisos la estimación no es fiable, y es mejor no dejar un fichero que se use sin mirar
             print('No escribo initial_pose_corregida.yaml: hay avisos. Revisa la colocación y repite.')
         elif escribir:
             escribir_yaml((x, y, th))

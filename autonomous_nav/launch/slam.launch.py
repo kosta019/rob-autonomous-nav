@@ -1,9 +1,7 @@
-# SLAM para el mapa entregable: scan_slam (reenvía /scan a /scan_slam con el sello corregido) y slam_toolbox (online
-# async, como el comando del laboratorio) con config/slam.yaml (los parámetros por defecto, leyendo /scan_slam).
-#
-# Uso (robot real, con el robot ya en la salida):  ros2 launch autonomous_nav slam.launch.py
-#   Al llegar a P Base: ros2 run nav2_map_server map_saver_cli -f mapa_demo   (README_DEMO.md, 5)
-# Con un bag o en Gazebo: use_sim_time:=true
+# Lanza scan_slam (reenvía /scan a /scan_slam con el sello corregido) y slam_toolbox en modo online async,
+# con los parámetros de config/slam.yaml.
+# Uso: ros2 launch autonomous_nav slam.launch.py   (con una grabación o en Gazebo, añadir use_sim_time:=true)
+# Para guardar el mapa: ros2 run nav2_map_server map_saver_cli -f mapa_demo
 import os
 
 from ament_index_python.packages import get_package_share_directory

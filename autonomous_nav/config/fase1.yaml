@@ -1,234 +1,234 @@
-# Parámetros de la fase I (fase1_node). Coordenadas en metros, en el sistema del enunciado (ver CLAUDE.md).
+# Parámetros de fase1_node. Coordenadas en metros, en el sistema del enunciado.
 # Formato de parámetros de ROS 2:
 #   - no admite listas anidadas, así que los puntos y los rectángulos van en arrays paralelos;
-#   - en los arrays de reales, todos los números llevan decimal (0.0, no 0), o ROS dará un error de tipo.
-# El script offline del paso 2 lee este mismo fichero con PyYAML: yaml.safe_load(f)["fase1_node"]["ros__parameters"].
+#   - en los arrays de reales, todos los números llevan decimal (0.0, no 0), o ROS da un error de tipo.
+# El script planificar_fase1.py lee este mismo fichero con PyYAML: yaml.safe_load(f)["fase1_node"]["ros__parameters"].
 
 fase1_node:
   ros__parameters:
 
     # ---------- Poses (las asigna el profesor en la demo) ----------
-    initial_pose: [0.700, 0.920, 0.0]      # [x, y, theta(rad)]. PROVISIONAL: punto A mirando a +X
-    final_pose:   [8.970, 14.497, 0.0]     # [x, y, theta(rad)]. PROVISIONAL: Q. La da el profesor (zona 2): -p final_pose:=...
+    initial_pose: [0.700, 0.920, 0.0]      # [x, y, theta(rad)]. Provisional: punto A mirando a +X
+    final_pose:   [8.970, 14.497, 0.0]     # [x, y, theta(rad)]. Provisional: Q. Se cambia con -p final_pose:=...
 
     # ---------- Ruta (salida desde A) ----------
     # Calculada con el Distance Transform con costes sobre maps/mapa_1cm.png (inflado 0.25 m).
-    # No empieza en A porque A es la salida. Desde B: quitar "B". Desde D: quitar "B" y "D".
-    # Desde C: PENDIENTE (faltan las mesas). El paso 2 genera config/fase1_ruta.yaml, que sobrescribe estos tres arrays.
+    # No empieza en A porque A es la salida. planificar_fase1.py genera config/fase1_ruta.yaml, que sobrescribe
+    # estos tres arrays. Desde B se quita "B", y desde D se quitan "B" y "D" (parámetro start_after).
     waypoint_names: ["B", "D", "E", "pre_door", "Door", "post_door_1", "post_door_2", "Q"]
     waypoints_x:    [3.102, 5.285, 5.082, 5.960, 6.490, 7.420, 7.960, 8.970]
     waypoints_y:    [1.722, 2.517, 6.122, 11.660, 11.682, 12.360, 14.160, 14.497]
     mandatory_waypoints: ["E", "Door", "Q"]   # en este orden; su precisión se evalúa
 
-    # ---------- Control (valores de partida, ajustables) ----------
+    # ---------- Control ----------
     control_rate: 10.0           # Hz del timer de control
     tol_waypoint: 0.07           # m, llegada a waypoints intermedios
-    tol_mandatory: 0.02          # m, llegada a E, Door, Q y pose final. El robot para justo al entrar: el error es ~tol (con 0.05 daba 4.8 cm)
-    tol_final_yaw: 0.02          # rad (~1 grado). Igual: el error final es ~tol
+    tol_mandatory: 0.02          # m, llegada a E, Door, Q y pose final (el robot para al entrar: error ~tol)
+    tol_final_yaw: 0.02          # rad (~1 grado), igual que arriba
     max_linear_speed: 0.15       # m/s (máximo del Burger: 0.22)
     max_angular_speed: 0.8       # rad/s (máximo del Burger: 2.84)
     k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
-    max_linear_accel: 0.20       # m/s²: la v sube como mucho esto por segundo (frenar, sin límite). 0 a 0.20 m/s en 1 s.
-                                 #   06/11: sin rampa, a 0.20 el tirón hacía saltar el rumbo del IMU ~30° y oscilaba
-    start_after: ""              # salida: "" desde A; "B" desde B o C; "D" desde D (quita los waypoints hasta ese inclusive)
-    plan_at_start: false         # true: parado, junta start_scans scans (obstáculos) y planifica desde la pose inicial.
-                                 #   Para B, C y D (paneles de madera movibles por la zona de salida). Desde A no hace falta
-    start_scans: 6               # a 5 Hz, ~1.2 s
-    # Pose de salida con el LiDAR (estado POSE_INICIAL, parado, antes de moverse): lo de comprobar_pose --escribir. Corrige
-    # el rumbo (paredes de pose_heading_axis) y cada coordenada de la que vea paredes; si no vale, no se mueve y reintenta.
-    # Apagado aquí (en el mundo vacío de Gazebo no hay paredes); en el robot real lo enciende real.yaml.
+    max_linear_accel: 0.20       # m/s²: la velocidad sube como mucho esto por segundo (al frenar no hay límite).
+                                 #   Sin rampa, el tirón al arrancar hace saltar el rumbo del IMU
+    start_after: ""              # waypoint de salida ("" desde A, "B" desde B o C, "D" desde D): quita los anteriores
+    plan_at_start: false         # true: parado, junta start_scans scans para ver obstáculos y planifica desde la pose
+                                 #   inicial. Para salir de B, C o D, donde hay paneles de madera movibles
+    start_scans: 6               # scans que se juntan al salir (a 5 Hz, ~1.2 s)
+    # Pose de salida con el LiDAR (estado POSE_INICIAL, parado, antes de moverse): corrige el rumbo con las paredes de
+    # pose_heading_axis y cada coordenada de la que vea paredes. Si no vale, no se mueve y reintenta.
+    # Apagado aquí porque el mundo vacío de Gazebo no tiene paredes; real.yaml lo enciende.
     start_pose_check: false
-    start_pose_scans: 25         # como comprobar_pose (mediana de cada rayo)
-    start_pose_min_points: 30    # puntos de pared en total
-    start_pose_max_rms: 0.02     # m. 07/11, salida B con el rumbo de partida 15° mal: resultado falso con 2.2 cm
-    start_pose_max_corr: 0.15    # m
-    start_pose_max_angle_deg: 10.0   # grados: converge desde ±10° en A, B y C (bags del 06/11); más, rechaza
-    final_plan_dist: 0.30        # m: si la pose final queda más lejos del último obligatorio (Q), se planifica hasta ella
+    start_pose_scans: 25         # scans de los que se saca la mediana de cada rayo (como comprobar_pose)
+    start_pose_min_points: 30    # puntos de pared mínimos en total
+    start_pose_max_rms: 0.02     # m: residuo máximo del ajuste a las paredes
+    start_pose_max_corr: 0.15    # m: corrección máxima de posición
+    start_pose_max_angle_deg: 10.0   # grados: corrección máxima de rumbo; con más, se rechaza
+    final_plan_dist: 0.30        # m: si la pose final queda más lejos del último obligatorio, se planifica hasta ella
     k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
-    turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar
-    reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, volver a GIRAR
+    turn_in_place_angle: 0.17    # rad (~10 grados): con más error, gira sin avanzar
+    reorient_angle: 0.52         # rad (~30 grados): si avanzando el error supera esto, vuelve a girar
 
     # ---------- Seguridad ----------
     stop_distance: 0.30          # m, medida desde el LiDAR, en el cono frontal
     stop_half_angle_deg: 30.0    # semiancho del cono frontal
     scan_timeout: 0.5            # s sin /scan (o sin /odom): parada total
 
-    # ---------- Obstáculos nuevos y replanificación (paso 3) ----------
-    static_clearance_file: "maps/holgura_5cm.npy"   # relativo a share/autonomous_nav; lo genera el paso 2 (+ .yaml)
-    obstacle_static_margin: 0.20 # m: una lectura es obstáculo NUEVO si la holgura estática allí es mayor (la deriva desplaza
-                                 #   las paredes; con 0.15 salían paredes desplazadas 16 cm como obstáculos en el vestíbulo)
+    # ---------- Obstáculos nuevos y replanificación ----------
+    static_clearance_file: "maps/holgura_5cm.npy"   # relativo a share/autonomous_nav; lo genera planificar_fase1.py
+    obstacle_static_margin: 0.20 # m: una lectura es obstáculo nuevo si la holgura estática allí es mayor que esto.
+                                 #   La deriva desplaza las paredes y con menos margen salían como obstáculos
     obstacle_plan_margin: 0.10   # m: al replanificar, los obstáculos nuevos cuentan como si fueran esto más grandes
-    obstacle_clear_scans: 3      # escaneos SEGUIDOS viendo libre un obstáculo para olvidarlo (una lectura suelta no basta)
-    obstacle_clear_zero_min_dist: 0.5  # m: una lectura 0.0 (LDS real: nada hasta range_max) cuenta como libre solo si el
-                                 #   obstáculo está más lejos que esto (0.0 también es "más cerca que range_min")
+    obstacle_clear_scans: 3      # scans seguidos viendo libre un obstáculo para olvidarlo (una lectura suelta no basta)
+    obstacle_clear_zero_min_dist: 0.5  # m: una lectura 0.0 (nada hasta range_max) cuenta como libre solo si el
+                                 #   obstáculo está más lejos que esto, porque 0.0 también es "más cerca que range_min"
     obstacle_memory_time: 30.0   # s sin volver a ver un obstáculo para olvidarlo
     obstacle_clear_margin: 0.10  # m: se olvida antes si un rayo del LiDAR pasa esto más allá de él (se ha ido)
     obstacle_log_spacing: 0.20   # m: un obstáculo va al Mission Log si está a esto de los ya registrados
     obstacle_max_range: 2.5      # m: más lejos, un error pequeño de rumbo ya desplaza mucho la lectura
-    obstacle_min_range: 0.20     # m: más cerca no se recuerda (propio robot, ecos de la ventana sucia: 05/11 a 12-17 cm).
-                                 #   La parada de emergencia no lo usa. comprobar_pose avisa si hay ecos más cerca.
-    obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria (el scan llega con retraso
-                                 #   y las paredes aparecen desplazadas: con 0.8 rad/s se veían obstáculos falsos)
+    obstacle_min_range: 0.20     # m: más cerca no se recuerda (el propio robot, ecos de una ventana sucia).
+                                 #   La parada de emergencia no lo usa. comprobar_pose avisa si hay ecos más cerca
+    obstacle_max_turn_rate: 0.2  # rad/s: girando más deprisa no se actualiza la memoria, porque el scan llega con
+                                 #   retraso y las paredes aparecen desplazadas
 
     # ---------- Fase II en el mismo lanzamiento ----------
     phase2_enabled: false        # true: al acabar la fase I sigue con la II (misión completa: -p phase2_enabled:=true)
     phase2_start_delay: 3.0      # s parado en la pose final de la fase I antes de empezar la II
-    # Ruta de cobertura (prueba del 06/11, test_real/prueba_pasillo.yaml): dos pasadas a lo largo de todo el pasillo,
-    # en Y 14.35 y 15.55 de X 8.80 a 0.10. El 97 % del pasillo libre queda a <= 1.2 m de la ruta (una pata de 5 cm da
-    # 2-3 puntos del LiDAR): encuentra las estaciones estén donde estén. Tramos con >= 0.55 m de holgura en el mapa.
+    # Ruta de cobertura: dos pasadas a lo largo de todo el pasillo, en Y 14.35 y 15.55, de X 8.80 a 0.10.
+    # El 97 % del pasillo libre queda a 1.2 m o menos de la ruta, así que se ven las patas de las estaciones estén
+    # donde estén. Tramos con 0.55 m o más de holgura en el mapa.
     phase2_waypoint_names: ["P1_e", "P1_o", "P2_o", "P2_e"]
     phase2_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
     phase2_waypoints_y:    [14.35, 14.35, 15.55, 15.55]
-    phase2_final_pose: [3.34, 15.70, 0.0]   # P Base (enunciado; medida con cinta el 06/11: coincide). θ: el enunciado no lo da;
-                                 #   con la estación cuadrada encontrada, mirando a ella (THETA_HACIA_ESTACION); si no, este
-    # Segunda cobertura (07/11): si tras la primera no está confirmada la estación cuadrada, estas pasadas antes de P Base
-    # (SEGUNDA_COBERTURA; si tampoco, ESTACION_NO_ENCONTRADA). Las de la primera desplazadas 0.30 m (Y 14.65 y 15.85): otros
-    # ángulos de vista de las patas y más cerca del lado del extintor. Holgura en el mapa >= 0.65 m en toda la ruta.
+    phase2_final_pose: [3.34, 15.70, 0.0]   # P Base (coincide con la cinta). El enunciado no da theta: con la estación
+                                 #   cuadrada encontrada mira hacia ella (THETA_HACIA_ESTACION), si no usa este
+    # Segunda cobertura: si tras la primera no está confirmada la estación cuadrada, hace estas pasadas antes de volver
+    # a P Base (SEGUNDA_COBERTURA; si tampoco aparece, ESTACION_NO_ENCONTRADA). Son las de la primera desplazadas
+    # 0.30 m (Y 14.65 y 15.85), con otros ángulos de vista de las patas. Holgura de 0.65 m o más en el mapa.
     phase2_second_coverage: true
     phase2_second_waypoint_names: ["S1_e", "S1_o", "S2_o", "S2_e"]
     phase2_second_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
     phase2_second_waypoints_y:    [14.65, 14.65, 15.85, 15.85]
 
-    # ---------- Fase III en el mismo lanzamiento (07/11, sin probar en el robot) ----------
-    # De P Base a delante de la estación cuadrada, medir sus patas parado (MEDIR3), entrar recto hasta su centro (ENTRAR)
-    # y comprobar el aparcado con las patas (VERIFICAR3). Misión completa: -p phase2_enabled:=true -p phase3_enabled:=true
+    # ---------- Fase III en el mismo lanzamiento ----------
+    # De P Base a delante de la estación cuadrada, mide sus patas parado (MEDIR3), entra recto hasta su centro (ENTRAR)
+    # y comprueba el aparcado con las patas (VERIFICAR3).
+    # Misión completa: -p phase2_enabled:=true -p phase3_enabled:=true
     phase3_enabled: false
-    phase3_front_dist: 0.80      # m del centro de la estación al punto delante (patas delanteras a 0.58 m: fuera del inflado)
-    phase3_scans: 20             # scans parado para medir las patas (bag 17:10: centro a ±1 cm con 10 scans a 1 m)
-    phase3_max_offset: 0.25      # m: centro medido más lejos que esto del de la fase II: medida no válida (no entra)
-    phase3_attempts: 3           # medidas fallidas (o realineaciones) antes de abandonar (FASE_III_ABANDONADA; no entra)
-    phase3_max_misalign_deg: 6.0 # grados entre la dirección al centro y la normal del lado: más, se recoloca
-                                 #   (FASE3_REALINEAR). 6° = 2.3 cm de desvío en las patas delanteras (hay ~10.6 cm)
-    phase3_speed: 0.05           # m/s al entrar: ~10.6 cm libres por lado entre las patas
+    phase3_front_dist: 0.80      # m del centro de la estación al punto de delante (las patas quedan fuera del inflado)
+    phase3_scans: 20             # scans parado para medir las patas
+    phase3_max_offset: 0.25      # m: si el centro medido está más lejos que esto del de la fase II, la medida no vale
+    phase3_attempts: 3           # medidas fallidas (o realineaciones) antes de abandonar (FASE_III_ABANDONADA)
+    phase3_max_misalign_deg: 6.0 # grados entre la dirección al centro y la normal del lado; con más, se recoloca
+                                 #   (FASE3_REALINEAR). 6° son 2.3 cm de desvío en las patas delanteras (hay ~10.6 cm)
+    phase3_speed: 0.05           # m/s al entrar: quedan ~10.6 cm libres por lado entre las patas
     phase3_tol: 0.01             # m: llegada al centro medido
     phase3_leg_clearance: 0.07   # m: al entrar, la parada de emergencia ignora lo que está a menos de esto de una pata
-    phase3_park_tol: 0.03        # m: aparcado bueno (decidido el 07/11): más, APARCADO_FUERA_DE_TOLERANCIA
-    phase2_max_linear_speed: 0.12   # m/s: estaciones y gente en cualquier sitio del pasillo
+    phase3_park_tol: 0.03        # m: aparcado bueno; con más error, APARCADO_FUERA_DE_TOLERANCIA
+    phase2_max_linear_speed: 0.12   # m/s: velocidad en el pasillo, por si hay estaciones o gente
 
     # ---------- Pilares de las estaciones de carga (fase II, pilares.py) ----------
-    pillar_zone: [-0.55, 9.57, 13.00, 17.15]   # [x_min, x_max, y_min, y_max]: el pasillo exterior (paredes medidas el
-                                 #   06/11: fondo X 9.57, extintor Y 17.15; mapa: X -0.55, Y 13.00 en la parte ancha).
-                                 #   Fuera no cuenta ningún pilar: en la sala, patas de sillas y mesas.
+    pillar_zone: [-0.55, 9.57, 13.00, 17.15]   # [x_min, x_max, y_min, y_max]: el pasillo exterior, medido en el
+                                 #   laboratorio. Fuera no cuenta ningún pilar (en la sala hay patas de sillas y mesas)
     pillar_max_range: 1.6        # m: más lejos, una pata da 0-1 rayos (a 1.2 m, 2-3)
     pillar_min_detections: 3     # detecciones para que un grupo cuente como pilar
-    pillar_forget_time: 3.0      # s sin ver un pilar para olvidarlo: la pose deriva y juntar mucho rato mezcla las patas
-    station_side: 0.44           # m entre centros de patas (medido el 06/11: 49 de extremo a extremo, patas de 5 cm)
-    station_tol: 0.05            # m de error admitido en cada lado/diagonal
+    pillar_forget_time: 3.0      # s sin ver un pilar para olvidarlo (la pose deriva y se mezclarían las patas)
+    station_side: 0.44           # m entre centros de patas (medido en el laboratorio: 49 cm de extremo a extremo)
+    station_tol: 0.05            # m de error admitido en cada lado y diagonal
     station_confirm_scans: 5     # scans viendo la estación antes de escribirla en el Mission Log
+
+    # ---------- Bloqueo y replanificación ----------
     block_lookahead: 1.5         # m de ruta por delante en los que se busca bloqueo (a menos de inflation_radius)
-    block_hysteresis: 0.10       # m: para dar la ruta por LIBRE se pide esto de más (en distancia y en alcance)
+    block_hysteresis: 0.10       # m: para dar la ruta por libre se pide esto de más (en distancia y en alcance)
     obstacle_wait_time: 3.0      # s parado antes de replanificar (por si es una persona que pasa)
     replan_retry_period: 5.0     # s entre reintentos si no hay camino
     replan_max_ratio: 1.5        # un replan más largo que ratio * lo que quedaba + extra es un rodeo largo: no se toma
-    replan_max_extra: 1.0        # m   (06/11 15:10: 10.1 m por las mesas, hacia atrás, donde quedaban 5.2: otro robot)
+    replan_max_extra: 1.0        # m, el extra de la regla anterior
     replan_long_detour_after: 30.0   # s sin camino tras los que sí se acepta un rodeo largo
-    mandatory_cover_radius: 0.40 # m: obligatorio tapado -> punto libre más cercano a él a menos de esto (OBLIGATORIO_TAPADO)
+    mandatory_cover_radius: 0.40 # m: si un obligatorio queda tapado, busca el punto libre más cercano a menos de esto
+                                 #   (OBLIGATORIO_TAPADO)
     mandatory_cover_wait: 5.0    # s sin camino antes de sustituir un obligatorio tapado
-    mandatory_cover_exclude: ["Door"]   # nunca se sustituyen (la puerta bloqueada no se puede dar por pasada)
+    mandatory_cover_exclude: ["Door"]   # nunca se sustituyen (con la puerta bloqueada la misión no está hecha)
     inflation_radius_retry: 0.20 # m, segundo intento si no hay camino; el tercero es inflation_radius_min
 
     # ---------- Robot ----------
-    lidar_offset_x: -0.032       # m, posición del LiDAR (base_scan) sobre el eje del robot. Del URDF turtlebot3_burger (scan_joint)
-    use_imu_yaw: true            # rumbo integrando el giróscopo de /imu (como el driver del TB3 real). false: rumbo de /odom
-    lidar_yaw_offset: 0.0        # rad: desfase de montaje del LiDAR (positivo = girado a la izquierda). comprobar_pose y la
-                                 #   relocalización lo restan al rumbo de las paredes. 05/11: 0 (ver real.yaml y CLAUDE.md)
-    pose_heading_axis: "Y"       # comprobar_pose: el rumbo sale solo de las caras de este eje ("Y" = pared izquierda,
-                                 #   y = 0.04); la posición, de todas. Las dos paredes de A difieren 1.76° (05/11). "" = todas
+    lidar_offset_x: -0.032       # m, posición del LiDAR (base_scan) sobre el eje del robot (URDF del turtlebot3_burger)
+    use_imu_yaw: true            # true: rumbo integrando el giróscopo de /imu. false: rumbo de /odom
+    lidar_yaw_offset: 0.0        # rad: desfase de montaje del LiDAR (positivo = girado a la izquierda).
+                                 #   comprobar_pose y la relocalización lo restan al rumbo de las paredes
+    pose_heading_axis: "Y"       # comprobar_pose: el rumbo sale solo de las caras de este eje ("Y" = pared izquierda);
+                                 #   la posición sale de todas. Las dos paredes de A no son perpendiculares. "" = todas
 
-    # ---------- Relocalización con la pared de la puerta (robot parado): rumbo y X de la recta, Y del lateral del marco ----------
+    # ---------- Relocalización en la puerta (robot parado): rumbo y X de la pared, Y del lateral del marco ----------
     reloc_before: "Door"         # se relocaliza al llegar al último waypoint antes de este (sea cual sea su nombre)
     reloc_scans: 10              # scans que se juntan (mediana): a 5 Hz, unos 2 s parado
-    reloc_on_block_dist: 0.50    # m: bloqueo a menos de esto de ese waypoint -> relocaliza ahí (una vez). 06/11: con la Y
-                                 #   +0.37 m el marco salía en el hueco y bloqueaba 0.21 m antes; desde allí: total, dy -0.37
-    # CALIBRACIÓN (05/11, robot en (5.96, 11.66, 90°) medido con cinta: 0.37 m a la canaleta, 0.43 m al yeso):
-    reloc_wall_x: 6.344          # m: X a la que el LiDAR ve la pared de la puerta (la canaleta; el yeso está en ~6.39).
-                                 #   Calibrada: 6.343-6.344 en 3 medidas (puntos girados para que la pared vaya en Y)
-    reloc_edge_y: 11.245         # m: Y del lateral del marco del borde cercano del hueco (el mapa dice 11.27).
-                                 #   Calibrada: 11.245-11.246 en 3 medidas. Hueco visto 0.774 m. Rumbo: el de la pared (la
-                                 #   colocación a mano tenía ~1° de error; el bag de la ruta 3 dice pared casi paralela a Y)
-    reloc_duct_end_y: 11.14      # m: Y donde acaba la canaleta. Respaldo si no se ve el marco. POR CALIBRAR con cinta (6/11);
-                                 #   11.14 viene de la vista en vivo del 05/11
-    reloc_door_width: 0.76       # m: ancho medido del hueco. Solo AVISO (la hoja abierta hacia la sala, con las bisagras en
-                                 #   el borde lejano, tapa ese lado)
+    reloc_on_block_dist: 0.50    # m: un bloqueo a menos de esto de ese waypoint relocaliza ahí (una vez), porque con la
+                                 #   Y mal el marco de la puerta sale en el hueco y bloquea antes de tiempo
+    # Referencias calibradas con el robot colocado con cinta junto a la pared de la puerta
+    reloc_wall_x: 6.344          # m: X a la que el LiDAR ve la pared de la puerta (la canaleta; el yeso está en ~6.39)
+    reloc_edge_y: 11.245         # m: Y del lateral del marco del borde cercano del hueco (el mapa dice 11.27)
+    reloc_duct_end_y: 11.14      # m: Y donde acaba la canaleta. Respaldo si no se ve el marco. TODO: calibrar con cinta
+    reloc_door_width: 0.76       # m: ancho medido del hueco. Solo da un aviso, porque la hoja de la puerta abierta
+                                 #   hacia la sala tapa el lado lejano
     reloc_door_width_tol: 0.06   # m
     reloc_band: 0.35             # m: puntos a menos de esto de x = reloc_wall_x con la pose creída
     reloc_wall_length: 1.0       # m de pared antes del borde cercano que se usan
-    reloc_frame_depth: 0.08      # m: el lateral del marco son puntos más de esto por detrás de la recta (el escalón de yeso
-                                 #   entre el final de la canaleta y el marco queda a ~6 cm)
+    reloc_frame_depth: 0.08      # m: el lateral del marco son puntos más de esto por detrás de la recta (el escalón de
+                                 #   yeso entre el final de la canaleta y el marco queda a ~6 cm)
     reloc_max_rms: 0.02          # m: residuo máximo de la recta (el tramo continuo más largo a < 2 cm: la canaleta)
-    reloc_min_points: 20         # puntos de pared mínimos en la recta. Desde E-Door_1 el tramo visible da ~22-28 rayos
-                                 #   (05/11); con la mediana de 10 scans, rumbo a ~0.2-0.3°
+    reloc_min_points: 20         # puntos de pared mínimos en la recta
     reloc_min_points_near: 10    # puntos de pared mínimos en los 0.5 m antes del borde (borde creíble)
-    reloc_max_dx: 0.30           # m: corrección de X máxima; más, no se corrige nada (RELOC_RECHAZADA dx)
-    reloc_max_dy: 0.45           # m: corrección de Y máxima; más, solo X y rumbo (RELOC_PARCIAL dy). Ruta 3: -0.20 a -0.28
+    reloc_max_dx: 0.30           # m: corrección de X máxima; con más, no se corrige nada (RELOC_RECHAZADA dx)
+    reloc_max_dy: 0.45           # m: corrección de Y máxima; con más, solo X y rumbo (RELOC_PARCIAL dy)
     reloc_max_angle_deg: 3.0     # grados: corrección de rumbo máxima
-    reloc_check_dist: 0.03       # m: al repetir el ajuste tras corregir, |dx| y |dy| deben quedar por debajo
-    reloc_check_angle_deg: 0.5   # grados: ídem para el rumbo (si no, RELOC_INCONSISTENTE)
-    reloc_retry_dist: 1.0        # m: SIN_CAMINO a menos de esto de Door, sin RELOC total aún -> relocaliza otra vez (alguien
-                                 #   tapando el final de la canaleta: en cuanto se aparta, se corrige la Y y sigue)
+    reloc_check_dist: 0.03       # m: al repetir el ajuste tras corregir, |dx| y |dy| deben quedar por debajo de esto
+    reloc_check_angle_deg: 0.5   # grados: igual para el rumbo (si no, RELOC_INCONSISTENTE)
+    reloc_retry_dist: 1.0        # m: si no hay camino a menos de esto de Door y aún no hay RELOC total, relocaliza otra
+                                 #   vez (puede que alguien tape el final de la canaleta)
     reloc_retry_max: 10          # reintentos como máximo
 
-    # ---------- Relocalización en Q con la esquina (robot parado al llegar): x = reloc_q_wall_x delante, y = reloc_q_wall_y ----------
-    # Detrás de la puerta no hay corrección con el mapa (está mal en Y): sin esto, ~20 cm y ~8° de error en Q (06/11).
-    reloc_q_at: "Q"              # al llegar a este waypoint se relocaliza (reloc_q_times veces) antes de darlo por alcanzado
+    # ---------- Relocalización en Q con la esquina (robot parado): pared x delante y pared y al lado ----------
+    # Detrás de la puerta no hay corrección con el mapa, porque está mal en Y.
+    reloc_q_at: "Q"              # al llegar aquí se relocaliza (reloc_q_times veces) antes de darlo por hecho
     reloc_q_times: 2             # la 1.ª corrige; tras ir al punto otra vez, la 2.ª comprueba (y corrige lo que quede)
-    reloc_q_wall_x: 9.530        # m: valores del MAPA (Gazebo). En el robot real, los de la cinta (real.yaml)
-    reloc_q_wall_y: 13.780
-    reloc_q_heading_axis: "Y"    # rumbo solo de la pared y = reloc_q_wall_y (como pose_heading_axis): las dos difieren ~3°
+    reloc_q_wall_x: 9.530        # m: valores del mapa (Gazebo). En el robot real, los medidos con cinta (real.yaml)
+    reloc_q_wall_y: 13.780       # m
+    reloc_q_heading_axis: "Y"    # rumbo solo de la pared y = reloc_q_wall_y (como pose_heading_axis): las dos difieren
     reloc_q_band: 0.35           # m: puntos a menos de esto de cada recta con la pose creída
     reloc_q_span: 1.0            # m: y a menos de esto del robot a lo largo de la pared
     reloc_q_max_rms: 0.02        # m
-    reloc_q_min_points: 15       # por pared (en los bags del 06/11: 70-85)
-    reloc_q_max_corr: 0.40       # m: corrección máxima en X y en Y; más, no se corrige (RELOC_Q_RECHAZADA grande)
-    reloc_q_max_angle_deg: 12.0  # grados: rumbo máximo (06/11: -8.3/-8.6° en Q)
-    reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dos paredes (06/11: ~3°)
+    reloc_q_min_points: 15       # puntos de pared mínimos por pared
+    reloc_q_max_corr: 0.40       # m: corrección máxima en X y en Y; con más, no se corrige (RELOC_Q_RECHAZADA grande)
+    reloc_q_max_angle_deg: 12.0  # grados: rumbo máximo
+    reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dos paredes
 
     # ---------- Corrección continua con el mapa de distancias (ajuste_mapa) ----------
-    map_corr_mode: "apagado"     # "apagado", "sombra" (solo registra) o "activo". En el robot real lo fija real.yaml
-    map_corr_file: "maps/distancias_2cm.npy"   # relativo a share/autonomous_nav; lo genera scripts/generar_mapa_distancias.py
+    map_corr_mode: "apagado"     # "apagado", "sombra" (solo registra) o "activo". El robot real lo fija en real.yaml
+    map_corr_file: "maps/distancias_2cm.npy"   # relativo a share/autonomous_nav; lo genera generar_mapa_distancias.py
     map_corr_every_scans: 5      # a 5 Hz, una corrección por segundo
     map_corr_max_turn_rate: 0.08 # rad/s: girando más, el scan llega con retraso respecto a la pose
-    map_corr_y_max: 10.2         # m: con más Y, no corrige. Cerca de la puerta el mapa no basta: manda ajuste_puerta
+    map_corr_y_max: 10.2         # m: con más Y, no corrige. Cerca de la puerta el mapa no basta y manda ajuste_puerta
     map_corr_max_range: 3.4      # m
-    map_corr_window: 0.15        # m: solo puntos a menos de esto de una pared. Con 0.35 las mesas arrastran la pose (bags 05/11)
+    map_corr_window: 0.15        # m: solo puntos a menos de esto de una pared; con más, las mesas arrastran la pose
     map_corr_sigma_range: 0.03   # m: error de un punto del LiDAR
     map_corr_sigma_xy: 0.03      # m: confianza en la odometría en cada corrección
-    map_corr_sigma_angle_deg: 1.0
+    map_corr_sigma_angle_deg: 1.0   # grados: confianza en el rumbo de la odometría
     map_corr_max_step: 0.03      # m: corrección máxima por paso y eje
     map_corr_max_angle_deg: 1.0  # grados: corrección máxima por paso
-    map_corr_min_points: 20
+    map_corr_min_points: 20      # puntos de pared mínimos para corregir
 
-    # ---------- Corrección en el pasillo con sus paredes (ajuste_paredes): cadencia, ventana, sigmas y límites de map_corr_* ----------
-    corridor_corr_mode: "apagado"          # "apagado", "sombra" o "activo". En el robot real lo fija real.yaml
-    corridor_corr_zone: [-0.55, 9.57, 13.90, 17.15]   # [x_min, x_max, y_min, y_max]: con el robot aquí dentro se usa esta y no la del mapa
-    corridor_corr_max_range: 2.0           # m: más lejos, el LDS da las paredes con ±5 cm (bags del 06/11)
-    # Paredes: recta "y" = valor (corrige la Y) para x entre from y to, o "x" = valor (corrige la X) para y entre from y to.
-    # Aquí, las del MAPA (Gazebo); en el robot real, las medidas con cinta (real.yaml)
+    # ---------- Corrección en el pasillo con sus paredes (ajuste_paredes): mismos parámetros que map_corr_* ----------
+    corridor_corr_mode: "apagado"          # "apagado", "sombra" o "activo". El robot real lo fija en real.yaml
+    corridor_corr_zone: [-0.55, 9.57, 13.90, 17.15]   # [x_min, x_max, y_min, y_max]: con el robot dentro se usa esta
+                                           #   corrección y no la del mapa
+    corridor_corr_max_range: 2.0           # m: más lejos, el LiDAR da las paredes con unos ±5 cm
+    # Paredes: recta "y" = valor (corrige la Y) para x entre from y to, o "x" = valor (corrige la X) para y entre
+    # from y to.
+    # Aquí las del mapa (Gazebo); en el robot real, las medidas con cinta (real.yaml)
     corridor_wall_axis: ["y"]
-    corridor_wall_value: [16.90]           # pared larga del pasillo (la del extintor)
-    corridor_wall_from: [-0.55]
-    corridor_wall_to: [9.53]
+    corridor_wall_value: [16.90]           # m: pared larga del pasillo (la del extintor)
+    corridor_wall_from: [-0.55]            # m
+    corridor_wall_to: [9.53]               # m
 
     # ---------- Log ----------
     log_file: "mission_log.csv"
     log_period: 0.5              # s entre filas periódicas
 
-    # ---------- Mapa y planificador (pasos 2 y 3) ----------
+    # ---------- Mapa y planificador ----------
     map_image: "maps/mapa_1cm.png"
-    map_resolution: 0.01         # m/píxel (deducido de las cotas de la figura)
+    map_resolution: 0.01         # m/píxel (deducido de las cotas de la figura del enunciado)
     map_origin_row: 71.0         # borde de píxel donde X = 0: fila = floor(100*X + 71)
     map_origin_col: 2.0          # borde de píxel donde Y = 0: col = floor(100*Y + 2)
-    map_remove_rows: [502]       # motas sueltas que hay que borrar
+    map_remove_rows: [502]       # motas sueltas que hay que borrar (fila y columna de cada una)
     map_remove_cols: [1217]
     grid_cell: 0.05              # m, rejilla del planificador
-    inflation_radius: 0.25       # m. NUNCA más de 0.30: con 0.33 la puerta se cierra
-    inflation_radius_min: 0.18   # m, último reintento si no hay camino (paso 3)
+    inflation_radius: 0.25       # m. Nunca más de 0.30: con 0.33 la puerta se cierra
+    inflation_radius_min: 0.18   # m, último reintento si no hay camino
     clearance_target: 0.60       # m, a partir de aquí no hay penalización por cercanía
-    clearance_cost_gain: 3.0
+    clearance_cost_gain: 3.0     # peso de la penalización por cercanía a los obstáculos
     simplify_clearance_cap: 0.45 # m, la simplificación no exige más holgura que esto
     simplify_margin: 0.02        # m, un atajo puede perder esto respecto al camino de celdas
     simplify_step: 0.01          # m, muestreo de los segmentos (sobre el mapa de 1 cm)
-    planning_sequence: ["A", "B", "D", "E", "Door", "Q"]   # el paso 2 planifica tramo a tramo esta secuencia
+    planning_sequence: ["A", "B", "D", "E", "Door", "Q"]   # planificar_fase1.py planifica tramo a tramo esta secuencia
 
     # Puntos del enunciado (v2), necesarios para el planificador
     point_names: ["A", "B", "C", "D", "E", "F", "G", "Door", "Q", "R", "S", "T", "Base"]
@@ -236,21 +236,17 @@ fase1_node:
     point_y:     [0.920, 1.722, 2.517, 2.517, 6.122, 8.528, 10.930, 11.682, 14.497, 16.170, 14.497, 15.300, 15.700]
 
     # Zonas prohibidas que no están en el mapa (rectángulos en coordenadas del mundo)
-    # suelo_irregular_pasillo (06/11, cinta negra en el suelo junto a la pared del fondo del pasillo): MEDIDO 0.82 m desde la
-    #   cruz de P Base hasta el borde, perpendicular a la pared (Y 15.70 + 0.82 = 16.52), 4.85 m de largo; SUPUESTO que empieza
-    #   en la pared del extremo (X -0.55 -> 4.30). Antes estimada Y 15.85 (P Base a 0.15 m, inalcanzable).
-    # ESTIMADAS desde la figura del enunciado: hay que medirlas en el laboratorio.
+    # suelo_irregular_vestibulo: estimada desde la figura del enunciado; falta medirla en el laboratorio.
+    # suelo_irregular_pasillo: cinta negra en el suelo junto a la pared del fondo del pasillo. Medido en el laboratorio:
+    #   0.82 m desde la cruz de P Base hasta el borde (Y 16.52) y 4.85 m de largo. Se supone que empieza en la pared
+    #   del extremo (X -0.55).
+    # hoja_puerta: la hoja de la puerta abierta del todo hacia la sala, con las bisagras en el borde lejano (Y ~ 12.03).
+    #   El LiDAR la ve y tapa el lado lejano del hueco, por eso no se usa para relocalizar.
+    # mesa_pequena: la mesa pequeña del lado de los armarios junto a E, entera (tablero visto desde arriba).
+    # mesas_D_E y mesas_puerta: las filas de mesas de la sala, a la izquierda de la ruta. El borde del lado de la ruta
+    #   está medido con cinta (X 4.28 entre D y E, X 4.87 de Y 7.30 a la puerta); el otro extremo (X 1.50) no, y basta
+    #   con que corte cualquier rodeo por dentro de la sala. El LiDAR solo ve las patas, que saldrían como obstáculos.
     # TODO: añadir las mesas entre B y C (zona 1) cuando estén medidas.
-    # hoja_puerta: la hoja abierta del todo hacia la sala, perpendicular al hueco, con las bisagras en el borde lejano
-    #   (Y ~ 12.03). Vista en vivo el 05/11 (robot en pose de cinta) en Y 12.01-12.02, X 5.59-6.37. El LiDAR la ve, pero tapa el
-    #   lado lejano del hueco; no se usa para relocalizar.
-    # mesa_pequena: la mesa pequeña del lado de los armarios, junto a E, entera (tablero visto desde arriba, hasta los
-    #   armarios). Medida desde la cruz de E el 05/11: los dos tubos a 0.43 m de E hacia los armarios.
-    # mesas_D_E, mesas_puerta (06/11): las filas de mesas de la sala, a la izquierda de la ruta. Borde del lado de la ruta
-    #   medido con cinta (NOTAS 06/11): X ~ 4.28 entre D y E y delante de E, X ~ 4.87 del escalón (Y 7.30) a la puerta,
-    #   hasta la pared derecha (Y 12.65). El otro extremo (X 1.50) no está medido: basta con que corte cualquier rodeo
-    #   por dentro de la sala. Sin ellas, con el pasillo de E a la puerta tapado (06/11 15:10, otro robot) el replan
-    #   rodeaba por las mesas, hacia atrás. El LiDAR solo ve las patas: salían como OBSTACULO en X 2.5-4.5, Y 3.7-8.7.
     nogo_names: ["suelo_irregular_vestibulo", "suelo_irregular_pasillo", "hoja_puerta", "mesa_pequena",
                  "mesas_D_E", "mesas_puerta"]
     nogo_x_min: [8.05, -0.55, 5.58, 5.51, 1.50, 1.50]

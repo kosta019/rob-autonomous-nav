@@ -80,9 +80,9 @@ que hacía `comprobar_pose --escribir`: corrige el rumbo y la posición con las 
 ### 3.2 Salida desde B, C o D
 
 Robot sobre la cruz, **mirando a +X** (hacia D), a ojo (±10°). Si el profesor da otro ángulo θ, cambiarlo en
-`initial_pose` del fichero de esa salida (`test_real/salida_B.yaml`, `salida_C.yaml` o `salida_D.yaml`, en radianes).
+`initial_pose` del fichero de esa salida (`config/salida_B.yaml`, `salida_C.yaml` o `salida_D.yaml`, en radianes).
 ```bash
-S=src/rob-autonomous-nav/test_real/salida_C.yaml          # o salida_B.yaml / salida_D.yaml
+S=$CFG/salida_C.yaml          # o salida_B.yaml / salida_D.yaml
 ros2 run autonomous_nav fase1_node --ros-args \
   --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml --params-file $S
 ```

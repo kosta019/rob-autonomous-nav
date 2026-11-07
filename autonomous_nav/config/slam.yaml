@@ -1,6 +1,5 @@
-# Parámetros de slam_toolbox para el mapa entregable (launch/slam.launch.py). Son los POR DEFECTO de slam_toolbox
-# (mapper_params_online_async.yaml de Jazzy, los del comando del laboratorio del 06/11) con un solo cambio: scan_topic
-# /scan_slam, el /scan con el sello corregido -0.1 s (nodo scan_slam). Ver docs/analisis_slam_20261106.md.
+# Parámetros de slam_toolbox para el mapa entregable (launch/slam.launch.py). Son los de por defecto
+# (mapper_params_online_async.yaml de Jazzy) con un solo cambio: scan_topic es /scan_slam (scan con el sello corregido).
 slam_toolbox:
   ros__parameters:
 

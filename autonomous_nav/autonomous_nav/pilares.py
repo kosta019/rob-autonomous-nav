@@ -1,12 +1,6 @@
-# Detector de pilares (patas de las estaciones de carga) con el LiDAR, para la fase II.
-# Solo numpy: lo usa fase1_node y se puede probar sin ROS (test/test_pilares.py).
-#
-# 1) pilares_scan: en un scan, una pata (cilindro de 5 cm) es un segmento de pocos rayos seguidos, estrecho, con lo que
-#    hay a los lados MÁS LEJOS (está delante del fondo). Segmentación del scan por saltos de distancia (teoría: extracción
-#    de características del láser).
-# 2) agrupar: las detecciones de muchos scans, ya en el mundo, se juntan en grupos (un grupo = un pilar).
-# 3) buscar_estacion: entre los pilares, 4 en cuadrado de lado L (la estación buena) o 3 en triángulo equilátero (la
-#    que hay que descartar).
+# Detector de pilares (patas de las estaciones de carga) con el LiDAR. Solo usa numpy, así que se puede probar sin ROS.
+# Primero busca patas en un scan (segmentos estrechos de pocos rayos con fondo más lejos a los lados), luego junta las
+# detecciones de varios scans en grupos (un grupo es un pilar) y al final busca 4 pilares en cuadrado o 3 en triángulo.
 import itertools
 import math
 
@@ -18,16 +12,15 @@ RADIO_PATA = 0.025   # pata de 5 cm de diámetro
 def pilares_scan(r, angle_min, angle_inc, range_min, range_max, alcance=1.6, salto=0.10, ancho_max=0.09,
                  max_rayos=8, hueco=2):
     # Devuelve los centros de las patas vistas en un scan, en el frame del LiDAR: lista de (x, y, n_rayos).
-    # alcance: más lejos, una pata da 0-1 rayos y no se distingue (a 1.2 m da 2-3).
-    # hueco: rayos sin dato que se saltan para buscar el vecino de cada lado (junto al borde de una pata suele salir
-    # un 0.0: el rayo roza el cilindro y no vuelve).
+    # alcance: más lejos, una pata da 0-1 rayos y no se distingue.
+    # hueco: rayos sin dato que se saltan al buscar el vecino de cada lado (al borde de una pata suele salir un 0.0).
     r = np.array(r, dtype=float)
     n = len(r)
     sin_dato = ~np.isfinite(r) | (r < range_min) | (r > range_max)
     r[sin_dato] = np.nan
     a = angle_min + np.arange(n) * angle_inc
 
-    # Segmentos: rayos con dato seguidos, sin saltos de más de `salto`
+    # Segmentos de rayos con dato seguidos, sin saltos de más de `salto`
     segmentos = []
     actual = []
     for i in range(n):
@@ -71,7 +64,7 @@ def pilares_scan(r, angle_min, angle_inc, range_min, range_max, alcance=1.6, sal
 
 
 def vecino(r, i, paso, hueco):
-    # Distancia del primer rayo con dato a partir de i (sin contarlo), hacia `paso` (-1 o +1). None si no hay.
+    # Distancia del primer rayo con dato a partir de i (sin contarlo), hacia `paso` (-1 o +1), o None si no hay.
     n = len(r)
     for k in range(1, hueco + 2):
         v = r[(i + paso * k) % n]
@@ -81,8 +74,7 @@ def vecino(r, i, paso, hueco):
 
 
 def a_mundo(puntos, pose, lidar_x=-0.032):
-    # Del frame del LiDAR al mundo. pose = (x, y, yaw) del centro del robot; el LiDAR está lidar_x por delante (negativo:
-    # detrás) en el eje del robot, sin girar.
+    # Pasa puntos del frame del LiDAR al mundo. pose = (x, y, yaw) del robot; el LiDAR está lidar_x por delante.
     x, y, th = pose
     c, s = math.cos(th), math.sin(th)
     lx, ly = x + lidar_x * c, y + lidar_x * s
@@ -91,8 +83,7 @@ def a_mundo(puntos, pose, lidar_x=-0.032):
 
 def agrupar(grupos, puntos, t, radio=0.08, memoria=20):
     # Junta cada punto (en el mundo) con el grupo más cercano a menos de `radio`, o crea uno nuevo.
-    # Cada grupo es una lista [x, y, n, t_ultimo]. La media pesa las últimas `memoria` detecciones: si la pose deriva,
-    # el grupo la sigue en vez de quedarse en un borrón.
+    # Cada grupo es [x, y, n, t_ultimo]. La media pesa las últimas `memoria` detecciones, para seguir la deriva.
     for px, py in puntos:
         mejor, dmin = None, radio
         for g in grupos:
@@ -111,17 +102,15 @@ def agrupar(grupos, puntos, t, radio=0.08, memoria=20):
 
 
 def olvidar(grupos, t, olvido=3.0):
-    # Quita los grupos que no se ven desde hace más de `olvido` s. Con la pose derivando, juntar mucho rato mezcla las
-    # patas; la estación se busca con lo visto hace poco.
+    # Quita los grupos que no se ven desde hace más de `olvido` s, porque con la pose derivando se mezclan patas.
     grupos[:] = [g for g in grupos if t - g[3] <= olvido]
     return grupos
 
 
 def centro_cuadrada(pilares, lado=0.44, tol=0.03):
-    # Fase III: el centro de la estación cuadrada (ya identificada) con sus patas vistas desde cerca, aunque una quede
-    # tapada por otra. Con 4 patas, buscar_estacion; con 3, las de un cuadrado forman un triángulo rectángulo (lados L, L
-    # y L·√2) y el centro es el punto medio de la hipotenusa. Devuelve (centro_x, centro_y, n_patas, angulo) o None, con el
-    # ángulo de los lados en [-45°, 45°) como buscar_estacion.
+    # Centro de la estación cuadrada vista desde cerca, aunque una pata quede tapada. Con 4 patas usa buscar_estacion;
+    # con 3 forman un triángulo rectángulo y el centro es el punto medio de la hipotenusa.
+    # Devuelve (centro_x, centro_y, n_patas, angulo) o None, con el ángulo de los lados en [-45°, 45°).
     est = buscar_estacion(pilares, lado, tol)
     if est is not None and est[0] == 'cuadrada':
         return est[1], est[2], 4, est[3]
@@ -131,7 +120,7 @@ def centro_cuadrada(pilares, lado=0.44, tol=0.03):
         d = sorted((math.dist(p, q), p, q) for p, q in itertools.combinations(patas, 2))
         err = max(abs(d[0][0] - lado), abs(d[1][0] - lado), abs(d[2][0] - diag))
         if err < tol and (mejor is None or err < mejor[0]):
-            p, q = d[2][1], d[2][2]                      # los extremos de la hipotenusa (la diagonal)
+            p, q = d[2][1], d[2][2]                      # extremos de la hipotenusa
             v = next(r for r in patas if r is not p and r is not q)   # la del ángulo recto
             a = math.atan2(p[1] - v[1], p[0] - v[0])     # un lado
             mejor = (err, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (a + math.pi / 4) % (math.pi / 2) - math.pi / 4)
@@ -139,17 +128,14 @@ def centro_cuadrada(pilares, lado=0.44, tol=0.03):
 
 
 def buscar_estacion(pilares, lado=0.44, tol=0.05):
-    # pilares: lista de (x, y). Busca 4 en cuadrado (lados `lado`, diagonales lado·√2) y, si no, 3 en triángulo
-    # equilátero de lado `lado`. Devuelve (tipo, centro_x, centro_y, angulo, patas) o None.
-    # tipo: 'cuadrada' (la estación buena) o 'triangular' (la que hay que descartar). Tres patas de un cuadrado
-    # (lados L, L, L·√2) no son un triángulo equilátero: no se confunden.
-    # angulo: cuadrada, el de sus lados en [-45°, 45°) (girado 90° es el mismo cuadrado); triangular, el de una punta
-    # vista desde el centro, en [-60°, 60°).
+    # pilares: lista de (x, y). Busca 4 en cuadrado (lado `lado`) y, si no, 3 en triángulo equilátero.
+    # Devuelve (tipo, centro_x, centro_y, angulo, patas) o None. El tipo es 'cuadrada' (la buena) o 'triangular'.
+    # El ángulo es el de los lados en [-45°, 45°) si es cuadrada y el de una punta en [-60°, 60°) si es triangular.
     diag = lado * math.sqrt(2)
     mejor = None
     for n_patas in (4, 3):
         for i, p0 in enumerate(pilares):
-            # Solo combinaciones de pilares cercanos entre sí (con muchos grupos, probarlas todas sería lento)
+            # Solo combinaciones de pilares cercanos entre sí, para no probarlas todas
             cerca = [p for p in pilares[i + 1:] if math.dist(p0, p) < diag + tol]
             for resto in itertools.combinations(cerca, n_patas - 1):
                 patas = (p0,) + resto
