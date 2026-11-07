@@ -84,7 +84,9 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
     lanzamiento (como la I→II), con `current_phase` = III. Y el rumbo inicial automático quita el paso manual de
     `comprobar_pose`.
   - *"completely explored and the station is identified"*: si al acabar la cobertura no se ha confirmado la cuadrada,
-    hoy va igual a P Base y da la fase II por completada. Decidir qué hacer (p. ej. otra pasada a otra Y, o registrarlo).
+    hoy va igual a P Base y da la fase II por completada. **Decidido (07/11):** hacer una segunda cobertura (ruta en
+    `config`, no en el código; p. ej. pasadas a otras Y para cubrir lo que la primera ve peor) y, si tampoco la
+    encuentra, registrarlo en el Mission Log (p. ej. `ESTACION_NO_ENCONTRADA`) y volver a P Base.
   - El mapa entregable debe mostrar las patas de la estación (comprobar con el nodo del scan resellado).
   - Mission Log: pide obstáculos "within the passadis area"; hoy `OBSTACULO` se registra en toda la misión (con
     `current_phase`, se puede filtrar en el informe). Las patas de la cuadrada son `PILAR`; las de la triangular,
