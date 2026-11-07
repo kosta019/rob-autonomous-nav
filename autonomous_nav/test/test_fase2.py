@@ -21,7 +21,7 @@ def nodo_falso(activa=True):
     reloj = SimpleNamespace(t=100.0)
     n = SimpleNamespace(
         estado='ORIENTAR', fase='I', pose_final=[8.97, 14.497, 0.0], tol_final_yaw=0.05, k_angular=1.0, max_w=1.0,
-        fase2_activa=activa, fase2_espera=3.0, t_pausa=None, fase2_nombres=['P1_e', 'P1_o'], fase2_x=[8.8, 0.1],
+        fase2_activa=activa, fase3_activa=False, fase2_espera=3.0, t_pausa=None, fase2_nombres=['P1_e', 'P1_o'], fase2_x=[8.8, 0.1],
         fase2_y=[14.35, 14.35], fase2_final=[3.34, 15.70, 0.0], fase2_max_v=0.12, max_v=0.20, tol_waypoint=0.10,
         tol_obligatorio=0.05, objetivos=[('final', 8.97, 14.497, 0.05)], i_objetivo=1, anclas=['E', 'Door'],
         get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=reloj.t * 1e9)),

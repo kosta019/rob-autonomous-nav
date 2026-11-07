@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **137 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **147 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -81,7 +81,9 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   4. Fase III: P Base → delante de R → alinearse con las patas (pose relativa a ellas) → entrar entre las dos de
      delante → parar con el centro a ≤ 3 cm de la cruz. La parada de emergencia no puede saltar por las patas
      laterales ya conocidas. Desarrollar con `bag_fase1_20261106_171005`. El usuario la prueba el lunes; si choca, no
-     entra en el vídeo.
+     entra en el vídeo. **HECHO en código (07/11, sin probar en el robot):** `phase3_enabled`; estados MEDIR3 (centro
+     relativo a las patas, `pilares.centro_cuadrada` con 3 o 4), ENTRAR (0.05 m/s, sin corrección de pose) y VERIFICAR3
+     (error real del aparcado en el log). Con el bag de las 17:10: centro a 0.6-1.2 cm de la cinta (6/6). README_DEMO 6.
   5. **HECHO (07/11, sin probar en el robot):** θ en P Base mirando a la estación cuadrada confirmada
      (`THETA_HACIA_ESTACION`); sin ella, el de `phase2_final_pose`.
 - **Descartado: acortar la fase II al encontrar R.** El enunciado: "Once the Corridor area is completely explored and

@@ -3,8 +3,10 @@
 Todo lo que hay que hacer el día de la demo, desde un PC del laboratorio recién encendido. Probado el 06/11/2026 con
 BOT 11. Las pruebas, los datos y el porqué de cada parámetro están en `test_real/datos_20261106/NOTAS.md`.
 
-**Estado (06/11):** fase I completa y probada desde A (2:49 a 0.20 m/s) y desde C (hasta Q) y B (hasta E) entre paneles. Fase II: solo un **prototipo**
-(recorre todo el pasillo y vuelve a P Base; todavía no detecta la estación). Fase III: **sin hacer**.
+**Estado (07/11):** fase I completa y probada desde A (2:49 a 0.20 m/s) y desde C (hasta Q) y B (hasta E) entre paneles.
+Fase II probada como prototipo el 06/11 (cobertura del pasillo y vuelta a P Base); el detector de estaciones, la segunda
+cobertura, la corrección en el pasillo y el θ en P Base, **hechos en código (07/11), sin probar en el robot**. Fase III:
+**hecha en código (07/11), sin probar** (sección 6). Pose de salida automática (07/11, sección 3.1).
 
 ---
 
@@ -171,8 +173,24 @@ Después, Ctrl+C en el nodo, en el SLAM (terminal 2) y en el bag (terminal 1).
 
 ## 6. Fase III
 
-**Sin hacer** (06/11). Estación buena: la cuadrada, 4 patas Ø 5 cm a 44 cm entre centros, 25 cm libres debajo; el robot
-cabe entre las patas con ~10 cm por lado. Medidas en `CLAUDE.md`.
+**Hecha en código (07/11), sin probar en el robot.** Misión completa: el comando de la fase I con
+`-p phase2_enabled:=true -p phase3_enabled:=true`. Tras `FASE II COMPLETADA` (en P Base, mirando a la estación), 3 s
+parado y `FASE III INICIO` (`current_phase` III):
+1. Va a un punto **0.80 m delante** de la estación cuadrada, perpendicular al lado más cercano con sitio (en R, el de P
+   Base o el del pasillo; por el de la pared no), y se orienta al centro (`FASE3_DELANTE`).
+2. **Parado ~4 s** (`MEDIR3`), mide las patas y el centro **relativo al robot**: `FASE3_CENTRO patas=N` (centro en
+   `obstacle_x/y`). Con el bag del 06/11 a ~1 m de R: centro a 0.6-1.2 cm de la cinta en 6 de 6 medidas. Si no las ve o el
+   centro está a más de 0.25 m del de la fase II: `FASE3_MEDIDA_FALLIDA`, y a la 3.ª `FASE_III_ABANDONADA` (**no entra**).
+3. **Entra recto a 0.05 m/s** hasta el centro (`FASE3_DENTRO`). La parada de emergencia no para por las 4 patas medidas
+   (con el robot centrado ni siquiera entran en el cono), pero sí por cualquier otra cosa.
+4. **Parado dentro** (`VERIFICAR3`), mide las patas alrededor: `FASE III COMPLETADA patas=N` con la distancia del centro
+   del robot al de la estación (m) en `error`. Más de 3 cm: además `APARCADO_FUERA_DE_TOLERANCIA`.
+
+**Probarla el lunes con alguien junto a la estación (interruptor de la OpenCR).** Si roza una pata o el aparcado sale fuera
+de tolerancia, no entra en el vídeo. Solo la fase III, con el robot en P Base: `-p initial_pose:="[3.34, 15.70, θ]"`
+no basta (la estación se identifica en la fase II): hay que lanzar la misión completa.
+Estación buena: la cuadrada, 4 patas Ø 5 cm a 44 cm entre centros, 25 cm libres debajo; el robot cabe entre las patas
+con ~10 cm por lado. Medidas en `CLAUDE.md`.
 
 ## 7. Guardar todo en el repo
 

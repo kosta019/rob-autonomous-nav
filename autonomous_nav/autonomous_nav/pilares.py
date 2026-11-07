@@ -117,6 +117,24 @@ def olvidar(grupos, t, olvido=3.0):
     return grupos
 
 
+def centro_cuadrada(pilares, lado=0.44, tol=0.03):
+    # Fase III: el centro de la estación cuadrada (ya identificada) con sus patas vistas desde cerca, aunque una quede
+    # tapada por otra. Con 4 patas, buscar_estacion; con 3, las de un cuadrado forman un triángulo rectángulo (lados L, L
+    # y L·√2) y el centro es el punto medio de la hipotenusa. Devuelve (centro_x, centro_y, n_patas) o None.
+    est = buscar_estacion(pilares, lado, tol)
+    if est is not None and est[0] == 'cuadrada':
+        return est[1], est[2], 4
+    diag = lado * math.sqrt(2)
+    mejor = None
+    for patas in itertools.combinations(pilares, 3):
+        d = sorted((math.dist(p, q), p, q) for p, q in itertools.combinations(patas, 2))
+        err = max(abs(d[0][0] - lado), abs(d[1][0] - lado), abs(d[2][0] - diag))
+        if err < tol and (mejor is None or err < mejor[0]):
+            p, q = d[2][1], d[2][2]                      # los extremos de la hipotenusa (la diagonal)
+            mejor = (err, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
+    return None if mejor is None else (mejor[1], mejor[2], 3)
+
+
 def buscar_estacion(pilares, lado=0.44, tol=0.05):
     # pilares: lista de (x, y). Busca 4 en cuadrado (lados `lado`, diagonales lado·√2) y, si no, 3 en triángulo
     # equilátero de lado `lado`. Devuelve (tipo, centro_x, centro_y, angulo, patas) o None.

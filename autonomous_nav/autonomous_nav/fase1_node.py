@@ -574,6 +574,22 @@ class Fase1Node(Node):
         if not (len(self.fase2b_nombres) == len(self.fase2b_x) == len(self.fase2b_y)):
             raise ValueError('phase2_second_waypoint_names, _x y _y: misma longitud')
         self.cobertura = 1          # qué cobertura del pasillo se está haciendo (fase II)
+        # Fase III en el mismo lanzamiento (07/11): de P Base a delante de la estación cuadrada, medir sus patas parado,
+        # entrar recto hasta su centro y comprobar el aparcado (estados MEDIR3, ENTRAR y VERIFICAR3)
+        self.fase3_activa = self.declare_parameter('phase3_enabled', Parameter.Type.BOOL).value
+        self.f3_dist = self.declare_parameter('phase3_front_dist', D).value
+        self.f3_n = self.declare_parameter('phase3_scans', Parameter.Type.INTEGER).value
+        self.f3_max_desvio = self.declare_parameter('phase3_max_offset', D).value
+        self.f3_intentos_max = self.declare_parameter('phase3_attempts', Parameter.Type.INTEGER).value
+        self.f3_v = self.declare_parameter('phase3_speed', D).value
+        self.f3_tol = self.declare_parameter('phase3_tol', D).value
+        self.f3_radio_pata = self.declare_parameter('phase3_leg_clearance', D).value
+        self.f3_tol_aparcado = self.declare_parameter('phase3_park_tol', D).value
+        self.f3_scans = []          # pilares vistos (frame del LiDAR) en cada scan, parado
+        self.f3_ultimo_scan = None
+        self.f3_intentos = 0
+        self.f3_centro = None       # objetivo de ENTRAR en el mundo (el centro de la estación medido desde delante)
+        self.f3_patas = []          # patas de la estación en el mundo: la parada de emergencia no para por ellas
         self.t_pausa = None
         # Salida desde B, C o D (06/11: la demo puede empezar en A, B, C o D, con paneles de madera movidos como obstáculos
         # por la zona de salida). start_after: se quitan los waypoints hasta ese inclusive (B para B y C; D para D).
@@ -748,6 +764,8 @@ class Fase1Node(Node):
             # Ángulo de cada lectura (no suponemos 360 muestras ni que el índice 0 sea el frente)
             a = normalizar(msg.angle_min + i * msg.angle_increment)
             if abs(a) <= self.cono and r < self.stop_distance and (r_min is None or r < r_min):
+                if self.estado == 'ENTRAR' and self.es_pata(x, y, th, r, a):
+                    continue        # fase III: entrar entre las patas es la maniobra; cualquier otra cosa sí para
                 r_min = r
                 a_min = a
         if r_min is None:
@@ -756,6 +774,13 @@ class Fase1Node(Node):
         lx = x + self.lidar_offset_x * math.cos(th)
         ly = y + self.lidar_offset_x * math.sin(th)
         return lx + r_min * math.cos(th + a_min), ly + r_min * math.sin(th + a_min)
+
+    def es_pata(self, x, y, th, r, a):
+        # ¿La lectura (r, a) del LiDAR cae a menos de phase3_leg_clearance de una pata conocida de la estación?
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+        px, py = lx + r * math.cos(th + a), ly + r * math.sin(th + a)
+        return any(math.hypot(px - qx, py - qy) < self.f3_radio_pata for qx, qy in self.f3_patas)
 
     # ---------- Obstáculos nuevos y replanificación (paso 3) ----------
 
@@ -957,6 +982,130 @@ class Fase1Node(Node):
         self.escribir_log(x, y, th, 'FASE II INICIO')
         if self.fase2_nombres and math.hypot(self.fase2_x[0] - x, self.fase2_y[0] - y) > self.plan_final_dist:
             self.planificar_final(x, y, th, 'FASE2')
+
+    def empezar_fase3(self, x, y, th):
+        # Fase III: a un punto delante de la estación cuadrada (a phase3_front_dist de su centro, perpendicular a uno de sus
+        # lados) mirando a su centro. De los cuatro lados, el más cercano con holgura en el mapa (R está junto a la pared
+        # del extintor: por ese lado no se entra). Al llegar y orientarse, ORIENTAR pasa a MEDIR3.
+        self.fase = 'III'
+        self.f3_intentos = 0
+        est = self.estacion_cuadrada()
+        if est is None:
+            self.get_logger().warn('FASE III: no hay estación cuadrada confirmada; no hago nada')
+            self.escribir_log(x, y, th, 'FASE_III_SIN_ESTACION')
+            self.estado = 'FIN'
+            return
+        delante = []
+        for k in range(4):
+            a = est['ang'] + k * math.pi / 2
+            px, py = est['x'] + self.f3_dist * math.cos(a), est['y'] + self.f3_dist * math.sin(a)
+            if pl.holgura_en(self.holgura, self.meta, px, py) > self.inflado:
+                delante.append((math.hypot(px - x, py - y), px, py))
+        if not delante:
+            self.get_logger().warn('FASE III: ningún lado de la estación tiene sitio delante; no hago nada')
+            self.escribir_log(x, y, th, 'FASE_III_SIN_HUECO', None, est['x'], est['y'])
+            self.estado = 'FIN'
+            return
+        _, px, py = min(delante)
+        self.objetivos = [('final', px, py, self.tol_obligatorio)]
+        self.i_objetivo = 0
+        self.pose_final = [px, py, math.atan2(est['y'] - py, est['x'] - px)]
+        self.anclas, self.obligatorios = [], []
+        self.max_v = self.fase2_max_v
+        self.estado = 'GIRAR'
+        self.get_logger().info(f'FASE III: a ({px:.2f}, {py:.2f}), delante de la estación ({est["x"]:.2f}, {est["y"]:.2f})')
+        self.escribir_log(x, y, th, 'FASE III INICIO', None, px, py)
+        if math.hypot(px - x, py - y) > self.plan_final_dist:
+            self.planificar_final(x, y, th, 'FASE3')
+
+    def juntar_patas(self, max_rayos):
+        # Robot parado: los pilares de cada scan nuevo, en el frame del LiDAR (sin la pose: así no influye su error). Con
+        # phase3_scans scans, los agrupa (un grupo = una pata) y devuelve (centro de la cuadrada o None, patas); antes, None.
+        msg = self.scan
+        if msg is self.f3_ultimo_scan:
+            return None
+        self.f3_ultimo_scan = msg
+        self.f3_scans.append(pil.pilares_scan(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min,
+                                              msg.range_max, max_rayos=max_rayos))
+        if len(self.f3_scans) < self.f3_n:
+            return None
+        grupos = []
+        for k, vistos in enumerate(self.f3_scans):
+            pil.agrupar(grupos, [(p[0], p[1]) for p in vistos], k)
+        self.f3_scans = []
+        patas = [(g[0], g[1]) for g in grupos if g[2] >= self.f3_n // 3]
+        return pil.centro_cuadrada(patas, self.estacion_lado), patas
+
+    def medir3(self, x, y, th):
+        # Estado MEDIR3 (parado delante de la estación): el centro de la estación con sus patas, relativo al robot. Es el
+        # objetivo de ENTRAR: así el aparcado no depende del error de la pose (solo de la odometría en el último metro).
+        r = self.juntar_patas(8)
+        if r is None:
+            return
+        centro, patas = r
+        est = self.estacion_cuadrada()
+        motivo, desvio = '', None
+        if centro is None:
+            motivo = 'sin_patas'
+        else:
+            cx, cy = pil.a_mundo([centro[:2]], (x, y, th), self.lidar_offset_x)[0]
+            desvio = math.hypot(cx - est['x'], cy - est['y'])
+            if desvio > self.f3_max_desvio:
+                motivo = 'lejos'
+        if motivo:
+            self.f3_intentos += 1
+            self.get_logger().warn(f'FASE III: medida de las patas fallida ({motivo}, {len(patas)} patas), '
+                                   f'intento {self.f3_intentos}/{self.f3_intentos_max}')
+            self.escribir_log(x, y, th, f'FASE3_MEDIDA_FALLIDA {motivo} patas={len(patas)}', desvio)
+            if self.f3_intentos >= self.f3_intentos_max:
+                self.get_logger().warn('FASE III abandonada: no entro sin ver bien las patas')
+                self.escribir_log(x, y, th, 'FASE_III_ABANDONADA')
+                self.estado = 'FIN'
+            return
+        self.f3_centro = (cx, cy)
+        # Solo lo que está donde debe estar una pata (a media diagonal del centro, ±5 cm): algo ajeno dentro de la estación
+        # no puede quedar fuera de la parada de emergencia
+        semidiagonal = self.estacion_lado / math.sqrt(2)
+        self.f3_patas = [p for p in pil.a_mundo(patas, (x, y, th), self.lidar_offset_x)
+                         if abs(math.hypot(p[0] - cx, p[1] - cy) - semidiagonal) < 0.05]
+        self.get_logger().info(f'FASE III: centro en ({cx:.3f}, {cy:.3f}) con {centro[2]} patas: entro')
+        self.escribir_log(x, y, th, f'FASE3_CENTRO patas={centro[2]}', desvio, cx, cy)
+        self.estado = 'ENTRAR'
+
+    def entrar(self, x, y, th):
+        # Estado ENTRAR: recto hasta el centro medido, despacio. Solo gira sobre sí mismo al principio (lejos de las patas);
+        # dentro, corrige el rumbo avanzando. Para al llegar (phase3_tol) o si lo ha pasado. Devuelve (v, w).
+        tx, ty = self.f3_centro
+        dx, dy = tx - x, ty - y
+        dist = math.hypot(dx, dy)
+        if dist < self.f3_tol or dx * math.cos(th) + dy * math.sin(th) <= 0.0:
+            self.escribir_log(x, y, th, 'FASE3_DENTRO', dist)
+            self.estado = 'VERIFICAR3'
+            self.f3_scans = []
+            return 0.0, 0.0
+        error = normalizar(math.atan2(dy, dx) - th)
+        if dist > 0.75 * self.f3_dist and abs(error) > self.angulo_girar:
+            return 0.0, limitar(self.k_angular * error, self.max_w)
+        w = limitar(self.k_angular * error, self.max_w) if dist > 0.05 else 0.0
+        return min(max(self.k_lineal * dist, 0.02), self.f3_v), w
+
+    def verificar3(self, x, y, th):
+        # Estado VERIFICAR3 (parado, dentro): las patas alrededor dan la distancia real del centro del robot al de la
+        # estación. Dentro, cada pata (a ~0.31 m) ocupa ~9 rayos: más de los 8 de la detección normal.
+        r = self.juntar_patas(15)
+        if r is None:
+            return
+        centro, patas = r
+        self.estado = 'FIN'
+        if centro is None:
+            self.get_logger().warn(f'FASE III COMPLETADA, sin verificar (veo {len(patas)} patas)')
+            self.escribir_log(x, y, th, f'FASE III COMPLETADA sin_verificar patas={len(patas)}')
+            return
+        error = math.hypot(centro[0] + self.lidar_offset_x, centro[1])
+        self.get_logger().info(f'FASE III COMPLETADA: centro del robot a {error * 100:.1f} cm del de la estación')
+        self.escribir_log(x, y, th, f'FASE III COMPLETADA patas={centro[2]}', error)
+        if error > self.f3_tol_aparcado:
+            self.escribir_log(x, y, th, 'APARCADO_FUERA_DE_TOLERANCIA', error)
 
     def estacion_cuadrada(self):
         # La estación de carga del enunciado (la cuadrada), si ya está confirmada (station_confirm_scans); si no, None
@@ -1385,6 +1534,14 @@ class Fase1Node(Node):
         elif self.estado == 'POSE_INICIAL':
             v, w = 0.0, 0.0
             self.pose_inicial_lidar(x, y, th)
+        elif self.estado == 'MEDIR3':
+            v, w = 0.0, 0.0
+            self.medir3(x, y, th)
+        elif self.estado == 'ENTRAR':
+            v, w = self.entrar(x, y, th)
+        elif self.estado == 'VERIFICAR3':
+            v, w = 0.0, 0.0
+            self.verificar3(x, y, th)
         else:
             v, w = self.maquina_estados(x, y, th)
 
@@ -1419,18 +1576,28 @@ class Fase1Node(Node):
             return 0.0, 0.0
 
         if self.estado == 'PAUSA':
-            # Entre la fase I y la II, parado
+            # Entre la fase I y la II (o la II y la III), parado
             if self.get_clock().now().nanoseconds * 1e-9 - self.t_pausa >= self.fase2_espera:
-                self.empezar_fase2(x, y, th)
+                if self.fase == 'I':
+                    self.empezar_fase2(x, y, th)
+                else:
+                    self.empezar_fase3(x, y, th)
             return 0.0, 0.0
 
         if self.estado == 'ORIENTAR':
             error = normalizar(self.pose_final[2] - th)
+            if abs(error) < self.tol_final_yaw and self.fase == 'III':
+                # Fase III: delante de la estación, mirando a su centro. Ahora, parado, medir sus patas (MEDIR3)
+                self.get_logger().info('Delante de la estación: mido sus patas')
+                self.escribir_log(x, y, th, 'FASE3_DELANTE', error)
+                self.estado = 'MEDIR3'
+                self.f3_scans = []
+                return 0.0, 0.0
             if abs(error) < self.tol_final_yaw:
                 self.get_logger().info(f'FASE {self.fase} COMPLETADA')
                 self.escribir_log(x, y, th, f'FASE {self.fase} COMPLETADA', error)
                 self.estado = 'FIN'
-                if self.fase == 'I' and self.fase2_activa:
+                if (self.fase == 'I' and self.fase2_activa) or (self.fase == 'II' and self.fase3_activa):
                     self.estado = 'PAUSA'
                     self.t_pausa = self.get_clock().now().nanoseconds * 1e-9
                 return 0.0, 0.0

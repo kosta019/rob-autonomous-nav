@@ -88,6 +88,19 @@ fase1_node:
     phase2_second_waypoint_names: ["S1_e", "S1_o", "S2_o", "S2_e"]
     phase2_second_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
     phase2_second_waypoints_y:    [14.65, 14.65, 15.85, 15.85]
+
+    # ---------- Fase III en el mismo lanzamiento (07/11, sin probar en el robot) ----------
+    # De P Base a delante de la estación cuadrada, medir sus patas parado (MEDIR3), entrar recto hasta su centro (ENTRAR)
+    # y comprobar el aparcado con las patas (VERIFICAR3). Misión completa: -p phase2_enabled:=true -p phase3_enabled:=true
+    phase3_enabled: false
+    phase3_front_dist: 0.80      # m del centro de la estación al punto delante (patas delanteras a 0.58 m: fuera del inflado)
+    phase3_scans: 20             # scans parado para medir las patas (bag 17:10: centro a ±1 cm con 10 scans a 1 m)
+    phase3_max_offset: 0.25      # m: centro medido más lejos que esto del de la fase II: medida no válida (no entra)
+    phase3_attempts: 3           # medidas fallidas antes de abandonar (FASE_III_ABANDONADA; el robot no entra)
+    phase3_speed: 0.05           # m/s al entrar: ~10.6 cm libres por lado entre las patas
+    phase3_tol: 0.01             # m: llegada al centro medido
+    phase3_leg_clearance: 0.07   # m: al entrar, la parada de emergencia ignora lo que está a menos de esto de una pata
+    phase3_park_tol: 0.03        # m: aparcado bueno (decidido el 07/11): más, APARCADO_FUERA_DE_TOLERANCIA
     phase2_max_linear_speed: 0.12   # m/s: estaciones y gente en cualquier sitio del pasillo
 
     # ---------- Pilares de las estaciones de carga (fase II, pilares.py) ----------
