@@ -96,7 +96,9 @@ fase1_node:
     phase3_front_dist: 0.80      # m del centro de la estación al punto delante (patas delanteras a 0.58 m: fuera del inflado)
     phase3_scans: 20             # scans parado para medir las patas (bag 17:10: centro a ±1 cm con 10 scans a 1 m)
     phase3_max_offset: 0.25      # m: centro medido más lejos que esto del de la fase II: medida no válida (no entra)
-    phase3_attempts: 3           # medidas fallidas antes de abandonar (FASE_III_ABANDONADA; el robot no entra)
+    phase3_attempts: 3           # medidas fallidas (o realineaciones) antes de abandonar (FASE_III_ABANDONADA; no entra)
+    phase3_max_misalign_deg: 6.0 # grados entre la dirección al centro y la normal del lado: más, se recoloca
+                                 #   (FASE3_REALINEAR). 6° = 2.3 cm de desvío en las patas delanteras (hay ~10.6 cm)
     phase3_speed: 0.05           # m/s al entrar: ~10.6 cm libres por lado entre las patas
     phase3_tol: 0.01             # m: llegada al centro medido
     phase3_leg_clearance: 0.07   # m: al entrar, la parada de emergencia ignora lo que está a menos de esto de una pata

@@ -581,6 +581,7 @@ class Fase1Node(Node):
         self.f3_n = self.declare_parameter('phase3_scans', Parameter.Type.INTEGER).value
         self.f3_max_desvio = self.declare_parameter('phase3_max_offset', D).value
         self.f3_intentos_max = self.declare_parameter('phase3_attempts', Parameter.Type.INTEGER).value
+        self.f3_max_desalineado = math.radians(self.declare_parameter('phase3_max_misalign_deg', D).value)
         self.f3_v = self.declare_parameter('phase3_speed', D).value
         self.f3_tol = self.declare_parameter('phase3_tol', D).value
         self.f3_radio_pata = self.declare_parameter('phase3_leg_clearance', D).value
@@ -995,28 +996,33 @@ class Fase1Node(Node):
             self.escribir_log(x, y, th, 'FASE_III_SIN_ESTACION')
             self.estado = 'FIN'
             return
+        self.escribir_log(x, y, th, 'FASE III INICIO', None, est['x'], est['y'])
+        self.ir_delante(x, y, th, est['x'], est['y'], est['ang'], 'FASE3')
+
+    def ir_delante(self, x, y, th, cx, cy, ang, nombre):
+        # Objetivo: el punto a phase3_front_dist del centro (cx, cy), perpendicular al lado (ángulo ang + k·90°) más
+        # cercano al robot con holgura en el mapa, mirando al centro. Sin ninguno: FASE_III_SIN_HUECO y para.
         delante = []
         for k in range(4):
-            a = est['ang'] + k * math.pi / 2
-            px, py = est['x'] + self.f3_dist * math.cos(a), est['y'] + self.f3_dist * math.sin(a)
+            a = ang + k * math.pi / 2
+            px, py = cx + self.f3_dist * math.cos(a), cy + self.f3_dist * math.sin(a)
             if pl.holgura_en(self.holgura, self.meta, px, py) > self.inflado:
                 delante.append((math.hypot(px - x, py - y), px, py))
         if not delante:
             self.get_logger().warn('FASE III: ningún lado de la estación tiene sitio delante; no hago nada')
-            self.escribir_log(x, y, th, 'FASE_III_SIN_HUECO', None, est['x'], est['y'])
+            self.escribir_log(x, y, th, 'FASE_III_SIN_HUECO', None, cx, cy)
             self.estado = 'FIN'
             return
         _, px, py = min(delante)
         self.objetivos = [('final', px, py, self.tol_obligatorio)]
         self.i_objetivo = 0
-        self.pose_final = [px, py, math.atan2(est['y'] - py, est['x'] - px)]
+        self.pose_final = [px, py, math.atan2(cy - py, cx - px)]
         self.anclas, self.obligatorios = [], []
         self.max_v = self.fase2_max_v
         self.estado = 'GIRAR'
-        self.get_logger().info(f'FASE III: a ({px:.2f}, {py:.2f}), delante de la estación ({est["x"]:.2f}, {est["y"]:.2f})')
-        self.escribir_log(x, y, th, 'FASE III INICIO', None, px, py)
+        self.get_logger().info(f'FASE III: a ({px:.2f}, {py:.2f}), delante de la estación ({cx:.2f}, {cy:.2f})')
         if math.hypot(px - x, py - y) > self.plan_final_dist:
-            self.planificar_final(x, y, th, 'FASE3')
+            self.planificar_final(x, y, th, nombre)
 
     def juntar_patas(self, max_rayos):
         # Robot parado: los pilares de cada scan nuevo, en el frame del LiDAR (sin la pose: así no influye su error). Con
@@ -1052,6 +1058,21 @@ class Fase1Node(Node):
             desvio = math.hypot(cx - est['x'], cy - est['y'])
             if desvio > self.f3_max_desvio:
                 motivo = 'lejos'
+        if not motivo:
+            # ¿Entra perpendicular a un lado? Ángulo entre la dirección robot -> centro y la normal del lado más cercano
+            ang = normalizar(centro[3] + th)               # ángulo de la estación en el mundo
+            phi = math.atan2(cy - y, cx - x)
+            desalineado = (phi - ang + math.pi / 4) % (math.pi / 2) - math.pi / 4
+            if abs(desalineado) > self.f3_max_desalineado:
+                self.f3_intentos += 1
+                self.get_logger().warn(f'FASE III: desalineado {math.degrees(desalineado):+.1f}° con la estación: me recoloco')
+                self.escribir_log(x, y, th, f'FASE3_REALINEAR {math.degrees(desalineado):+.1f}', desvio, cx, cy)
+                if self.f3_intentos >= self.f3_intentos_max:
+                    self.escribir_log(x, y, th, 'FASE_III_ABANDONADA')
+                    self.estado = 'FIN'
+                    return
+                self.ir_delante(x, y, th, cx, cy, ang, 'FASE3_REALINEAR')
+                return
         if motivo:
             self.f3_intentos += 1
             self.get_logger().warn(f'FASE III: medida de las patas fallida ({motivo}, {len(patas)} patas), '

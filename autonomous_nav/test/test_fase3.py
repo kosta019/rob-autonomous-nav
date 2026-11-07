@@ -23,9 +23,14 @@ PATAS = [(C[0] + dx, C[1] + dy) for dx in (-0.22, 0.22) for dy in (-0.22, 0.22)]
 
 
 def test_centro_con_cuatro_y_con_tres_patas():
-    assert pil.centro_cuadrada(PATAS) == pytest.approx((C[0], C[1], 4))
+    assert pil.centro_cuadrada(PATAS) == pytest.approx((C[0], C[1], 4, 0.0))
     # Una tapada: con las otras tres (triángulo rectángulo) el centro es el punto medio de la hipotenusa
-    assert pil.centro_cuadrada(PATAS[:3]) == pytest.approx((C[0], C[1], 3))
+    assert pil.centro_cuadrada(PATAS[:3]) == pytest.approx((C[0], C[1], 3, 0.0))
+    # Girada 10°: también el ángulo, con 3 patas
+    g = math.radians(10)
+    girada = [(C[0] + dx * math.cos(g) - dy * math.sin(g), C[1] + dx * math.sin(g) + dy * math.cos(g))
+              for dx, dy in [(p[0] - C[0], p[1] - C[1]) for p in PATAS]]
+    assert pil.centro_cuadrada(girada[1:])[3] == pytest.approx(g)
     # Tres patas que no son de un cuadrado de 44 cm: nada
     assert pil.centro_cuadrada([(0.0, 0.0), (0.44, 0.0), (0.22, 0.38)]) is None
 
@@ -51,13 +56,13 @@ def nodo(estado='MEDIR3'):
     n = SimpleNamespace(
         estado=estado, fase='III', scan=None, f3_scans=[], f3_ultimo_scan=None, f3_n=20, f3_intentos=0,
         f3_intentos_max=3, f3_max_desvio=0.25, f3_centro=None, f3_patas=[], f3_v=0.05, f3_tol=0.01, f3_dist=0.80,
-        f3_radio_pata=0.07, f3_tol_aparcado=0.03, estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5,
+        f3_radio_pata=0.07, f3_tol_aparcado=0.03, f3_max_desalineado=math.radians(6.0), estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5,
         max_w=0.4, angulo_girar=0.17, cono=math.radians(30), stop_distance=0.30, tol_obligatorio=0.02,
         estaciones=[{'tipo': 'cuadrada', 'x': C[0] + 0.05, 'y': C[1] - 0.04, 'ang': 0.0, 'vistas': 9}],
         estacion_confirmar=5, inflado=0.25, plan_final_dist=0.30, fase2_max_v=0.12,
         get_logger=lambda: SimpleNamespace(info=lambda *a: None, warn=lambda *a: None),
         escribir_log=lambda x, y, th, ev, *a: log.append((ev, a)))
-    for m in ('juntar_patas', 'estacion_cuadrada', 'es_pata'):
+    for m in ('juntar_patas', 'estacion_cuadrada', 'es_pata', 'ir_delante'):
         setattr(n, m, (lambda f: lambda *a: f(n, *a))(getattr(Fase1Node, m)))
     return n, log
 
@@ -171,3 +176,22 @@ def test_de_la_fase2_a_la_3_y_de_orientar_a_medir():
     n.fase, n.estado = 'III', 'ORIENTAR'
     Fase1Node.maquina_estados(n, 3.34, 15.70, 0.2)
     assert n.estado == 'MEDIR3' and log[-1] == 'FASE3_DELANTE' and n.f3_scans == []
+
+
+def test_desalineado_no_entra_y_se_recoloca():
+    # La estación está girada 12° (la fase II dio 0°): delante del lado -X "del mapa", la dirección al centro se aparta 12°
+    # de la normal de su lado. No entra: va al punto delante con el ángulo medido de cerca
+    g = math.radians(12)
+    girada = [(C[0] + (p[0] - C[0]) * math.cos(g) - (p[1] - C[1]) * math.sin(g),
+               C[1] + (p[0] - C[0]) * math.sin(g) + (p[1] - C[1]) * math.cos(g)) for p in PATAS]
+    pose = (C[0] - 0.80, C[1], 0.0)
+    n, log = nodo()
+    n.holgura, n.meta = np.full((200, 200), 1.0), {'resolucion': 0.05, 'origen_x': 0.0, 'origen_y': 10.0}
+    n.planificar_final = lambda *a: None
+    for _ in range(20):
+        n.scan = scan(pose, patas=girada)
+        Fase1Node.medir3(n, *pose)
+    assert log[-1][0].startswith('FASE3_REALINEAR') and float(log[-1][0].split()[1]) == pytest.approx(-12.0, abs=0.5)
+    assert n.estado == 'GIRAR' and n.f3_intentos == 1
+    px, py = n.objetivos[0][1:3]
+    assert (px, py) == pytest.approx((C[0] - 0.80 * math.cos(g), C[1] - 0.80 * math.sin(g)), abs=0.01)

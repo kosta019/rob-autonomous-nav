@@ -181,6 +181,9 @@ parado y `FASE III INICIO` (`current_phase` III):
 2. **Parado ~4 s** (`MEDIR3`), mide las patas y el centro **relativo al robot**: `FASE3_CENTRO patas=N` (centro en
    `obstacle_x/y`). Con el bag del 06/11 a ~1 m de R: centro a 0.6-1.2 cm de la cinta en 6 de 6 medidas. Si no las ve o el
    centro está a más de 0.25 m del de la fase II: `FASE3_MEDIDA_FALLIDA`, y a la 3.ª `FASE_III_ABANDONADA` (**no entra**).
+   Si desde ahí entraría torcido (más de 6° respecto a la perpendicular de un lado: el ángulo de la fase II venía mal), no
+   entra: `FASE3_REALINEAR <grados>`, va al punto delante con el ángulo medido de cerca y vuelve a medir (cuenta como
+   intento).
 3. **Entra recto a 0.05 m/s** hasta el centro (`FASE3_DENTRO`). La parada de emergencia no para por las 4 patas medidas
    (con el robot centrado ni siquiera entran en el cono), pero sí por cualquier otra cosa.
 4. **Parado dentro** (`VERIFICAR3`), mide las patas alrededor: `FASE III COMPLETADA patas=N` con la distancia del centro
