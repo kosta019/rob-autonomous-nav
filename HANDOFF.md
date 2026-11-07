@@ -60,9 +60,9 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 - Fase III: aparcado dado por bueno con el centro a **≤ 3 cm** de la cruz.
 - Mission Log: las patas salen como `OBSTACULO` (todos los puntos) y hay que **indicar cuáles de ellos son las patas**
   (hoy, filas `PILAR` aparte con su posición; revisar que se pueda cruzar una cosa con la otra).
-- **"Asume que el ángulo puede moverse: corrección automática antes de empezar a moverse"**: PENDIENTE DE ACLARAR con
-  el usuario si se refiere al rumbo inicial del robot (hoy `comprobar_pose --escribir` a mano) o a la orientación de
-  las estaciones.
+- **Rumbo inicial automático (confirmado: es el rumbo del robot en la salida):** el θ de salida puede variar; el nodo
+  debe corregirlo solo al arrancar, parado, con el LiDAR contra las paredes (lo que hoy hace a mano
+  `comprobar_pose --escribir`), antes de moverse.
 - Pendientes de confirmar por el usuario: (1) localización en el pasillo con paredes medidas (`ajuste_mapa` ampliado;
   el lunes medir con cinta la parte ancha Y 13.00 entre X 1.32-5.18 y el extremo X −0.55); (2) mapa entregable con
   slam_toolbox y el scan resellado −0.1 s (nodo reenviador); (3) fase III hecha antes del lunes con
