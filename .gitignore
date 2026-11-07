@@ -17,3 +17,10 @@ bags/
 
 # Diapositivas de clase (material del profesor): solo en local, para consultarlas
 docs/teoria/
+
+# Entregables (se dejan en entrega/ para crear_zip.sh; no van a git)
+entrega/*.zip
+entrega/*.pdf
+entrega/*.mp4
+entrega/mapa/
+entrega/mission_log.csv

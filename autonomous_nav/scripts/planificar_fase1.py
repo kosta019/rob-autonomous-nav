@@ -181,6 +181,7 @@ def dibujar(ruta_png, h5, meta1, meta5, p, tramos, inflado):
     ax.set_aspect('equal')
     ax.grid(alpha=0.3)
     fig.tight_layout()
+    os.makedirs(os.path.dirname(ruta_png), exist_ok=True)
     fig.savefig(ruta_png, dpi=110)
     plt.close(fig)
 
