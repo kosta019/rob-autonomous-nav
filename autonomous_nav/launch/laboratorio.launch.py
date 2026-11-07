@@ -1,7 +1,7 @@
 # Gazebo con el mundo del laboratorio (worlds/laboratorio.sdf) y el TurtleBot3 Burger.
 # El origen de Gazebo es el del enunciado, así que la pose real del robot sale en coordenadas del enunciado.
 #
-# Uso:  ros2 launch autonomous_nav laboratorio.launch.py [gui:=false] [x:=.. y:=.. yaw:=..]
+# Uso:  ros2 launch autonomous_nav laboratorio.launch.py [gui:=false] [x:=.. y:=.. yaw:=..] [world:=<ruta .sdf>]
 # Sin x/y/yaw, el robot aparece en initial_pose de config/fase1.yaml (la misma que usa fase1_node).
 import os
 
@@ -23,10 +23,11 @@ def generate_launch_description():
 
     with open(os.path.join(nav, 'config', 'fase1.yaml')) as f:
         x0, y0, yaw0 = yaml.safe_load(f)['fase1_node']['ros__parameters']['initial_pose']
-    mundo = os.path.join(nav, 'worlds', 'laboratorio.sdf')
 
     return LaunchDescription([
         DeclareLaunchArgument('gui', default_value='true'),
+        # Mundo a abrir (por defecto, el del laboratorio sin obstáculos)
+        DeclareLaunchArgument('world', default_value=os.path.join(nav, 'worlds', 'laboratorio.sdf')),
         DeclareLaunchArgument('x', default_value=str(x0)),
         DeclareLaunchArgument('y', default_value=str(y0)),
         DeclareLaunchArgument('yaw', default_value=str(yaw0)),
@@ -35,7 +36,7 @@ def generate_launch_description():
         # Servidor de Gazebo y, si gui:=true, la ventana
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(gz, 'launch', 'gz_sim.launch.py')),
-            launch_arguments={'gz_args': ['-r -s -v2 ', mundo], 'on_exit_shutdown': 'true'}.items()),
+            launch_arguments={'gz_args': ['-r -s -v2 ', LaunchConfiguration('world')], 'on_exit_shutdown': 'true'}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(gz, 'launch', 'gz_sim.launch.py')),
             launch_arguments={'gz_args': '-g -v2 '}.items(),

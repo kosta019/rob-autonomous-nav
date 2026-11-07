@@ -1,0 +1,62 @@
+# Parámetros de la simulación en Gazebo (batería nocturna). Coordenadas en metros, sistema del enunciado.
+# Los puntos de la misión se leen de autonomous_nav/config/fase1.yaml; aquí solo lo que es de la simulación.
+
+mundo_base: autonomous_nav/worlds/laboratorio.sdf
+
+# ---------- Estaciones de carga (fijas en todos los escenarios) ----------
+estaciones:
+  cuadrada: {centro: [7.500, 16.170], giro_grados: 0.0, lado: 0.44, patas: 4}    # centrada en R del enunciado
+  triangular: {centro: [2.136, 15.300], giro_grados: 15.0, lado: 0.44, patas: 3} # centrada en T; hay que descartarla
+  radio_pata: 0.025         # patas de Ø 5 cm
+  alto_pata: 0.25
+  tablero_z: 0.26           # centro del tablero fino que va encima (0.25-0.27)
+  tablero_grueso: 0.02
+
+# ---------- Obstáculos ----------
+obstaculos:
+  panel: {alto: 0.30, grueso: 0.03, largo_min: 0.6, largo_max: 1.2}
+  caja: {lado: 0.30}
+  prob_panel: 0.8           # el resto son cajas
+  # Dificultad: probabilidad y rango de obstáculos [min, max]
+  dificultad:
+    tranquila: {prob: 0.50, n: [1, 3]}
+    media:     {prob: 0.35, n: [4, 6]}
+    exigente:  {prob: 0.15, n: [7, 10]}
+  # Zonas donde caen (rectángulos [x0, x1, y0, y1], con peso): zona 1, sala hasta la puerta, vestíbulo, pasillo
+  zonas:
+    zona1:     {rect: [0.0, 6.0, 0.9, 7.0],    peso: 3.0}
+    sala:      {rect: [3.5, 6.3, 6.0, 12.6],   peso: 2.0}
+    vestibulo: {rect: [6.4, 9.0, 11.0, 14.5],  peso: 1.5}
+    pasillo:   {rect: [0.0, 9.5, 13.8, 16.9],  peso: 3.5}
+  dist_min_puntos: 0.5      # a A, B, C, D (el de salida), E, Door, Q, P Base y los puntos de la cobertura
+  dist_min_estacion: 0.9    # al centro de las estaciones
+  holgura_min_pared: 0.04   # m entre el obstáculo y las paredes (holgura del mapa de 5 cm)
+  intentos: 400             # por obstáculo, antes de rendirse con ese escenario
+
+# ---------- Persona que pasa (obstáculo móvil) ----------
+persona:
+  prob_tranquila_media: 0.40      # probabilidad de llevar 1 persona en las tranquilas y medias
+  n_exigente: [1, 2]              # personas en las muy exigentes
+  diametro: 0.30                  # cilindro de 1.7 m de alto (el LiDAR ve su sección a 18 cm)
+  alto: 1.7
+  velocidad: [0.5, 1.0]           # m/s
+  pausa: [3.0, 8.0]               # s parada en cada extremo, fuera de la ruta
+  largo_max: 4.0                  # m máximos del segmento (se recorta si hay paredes u obstáculos)
+  largo_min: 2.0
+  fuera_de_ruta: 0.7              # m mínimos entre cada extremo y la ruta prevista
+  holgura_min: 0.22               # m mínimos a paredes (holgura del mapa) en todo el segmento
+  dist_min_puntos: 0.6            # m del segmento a los puntos clave (salida, E, Door, Q, Base, cobertura)
+  dist_ruta_min_punto_clave: 1.0  # m: el cruce con la ruta no se elige tan cerca de un punto obligatorio
+  parar_a: 0.45                   # m centro a centro: si el robot está delante y más cerca, la persona se para (0: no)
+  parar_s: 3.0                    # s parada antes de dar media vuelta si el robot no se aparta
+  arranque_s: [10.0, 120.0]       # s simulados hasta que empieza a moverse (desfase aleatorio)
+
+# ---------- Misión ----------
+salidas: [A, B, C, D]
+tiempo_limite: 1800.0             # s simulados por misión (30 min)
+tiempo_limite_reloj: 3600         # s de reloj máximos por misión (seguro contra un Gazebo que no avanza)
+fin_eventos: ["FASE III COMPLETADA", "FASE_III_ABANDONADA", "FASE_III_SIN_ESTACION", "FASE_III_SIN_HUECO"]
+
+# ---------- Física ----------
+real_time_factor: 0.0             # 0: sin tope (lo más rápido que dé la CPU). Si da problemas, 1.0
+radio_robot: 0.105                # m, círculo de la huella

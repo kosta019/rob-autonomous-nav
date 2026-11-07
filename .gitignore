@@ -24,3 +24,6 @@ entrega/*.pdf
 entrega/*.mp4
 entrega/mapa/
 entrega/mission_log.csv
+sim/ws/
+sim/resultados/
+sim/tmp/
