@@ -4,6 +4,6 @@
 cd "$(dirname "$0")/.." || exit 1
 docker run --rm --network none -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -v "$PWD":/ws/src/rob-autonomous-nav:ro rob-jazzy bash -c '
   source /opt/ros/jazzy/setup.bash && cd /ws &&
-  colcon build --packages-select autonomous_nav > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
+  colcon build --base-paths src/rob-autonomous-nav/autonomous_nav --packages-select autonomous_nav > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
   source install/setup.bash && cd src/rob-autonomous-nav/autonomous_nav &&
   python3 -m pytest -q -p no:cacheprovider test "$@"' -- "$@"

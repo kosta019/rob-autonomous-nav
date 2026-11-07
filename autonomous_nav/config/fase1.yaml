@@ -100,6 +100,7 @@ fase1_node:
     phase3_attempts: 3           # medidas fallidas (o realineaciones) antes de abandonar (FASE_III_ABANDONADA)
     phase3_max_misalign_deg: 6.0 # grados entre la dirección al centro y la normal del lado; con más, se recoloca
                                  #   (FASE3_REALINEAR). 6° son 2.3 cm de desvío en las patas delanteras (hay ~10.6 cm)
+    phase3_side_wait: 10.0       # s sin camino al punto de delante antes de probar otro lado (0: nunca cambia)
     phase3_speed: 0.05           # m/s al entrar: quedan ~10.6 cm libres por lado entre las patas
     phase3_tol: 0.01             # m: llegada al centro medido
     phase3_leg_clearance: 0.07   # m: al entrar, la parada de emergencia ignora lo que está a menos de esto de una pata

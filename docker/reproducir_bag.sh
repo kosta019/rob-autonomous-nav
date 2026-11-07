@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.." || exit 1
 mkdir -p bags/replay
 docker run --rm --network none -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST -v "$PWD":/ws/src/rob-autonomous-nav:ro -v "$PWD/bags/replay":/replay rob-jazzy bash -c "
   source /opt/ros/jazzy/setup.bash && cd /ws &&
-  colcon build --packages-select autonomous_nav > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
+  colcon build --base-paths src/rob-autonomous-nav/autonomous_nav --packages-select autonomous_nav > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
   source install/setup.bash
   CFG=install/autonomous_nav/share/autonomous_nav/config
   # El bag en segundo plano y el nodo en primer plano: un proceso con & en un script ignora el Ctrl+C (SIGINT).

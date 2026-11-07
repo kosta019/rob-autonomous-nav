@@ -562,6 +562,7 @@ class Fase1Node(Node):
         self.f3_max_desvio = self.declare_parameter('phase3_max_offset', D).value
         self.f3_intentos_max = self.declare_parameter('phase3_attempts', Parameter.Type.INTEGER).value
         self.f3_max_desalineado = math.radians(self.declare_parameter('phase3_max_misalign_deg', D).value)
+        self.f3_espera_lado = self.declare_parameter('phase3_side_wait', D).value
         self.f3_v = self.declare_parameter('phase3_speed', D).value
         self.f3_tol = self.declare_parameter('phase3_tol', D).value
         self.f3_radio_pata = self.declare_parameter('phase3_leg_clearance', D).value
@@ -571,6 +572,8 @@ class Fase1Node(Node):
         self.f3_intentos = 0
         self.f3_centro = None       # objetivo de ENTRAR en el mundo (el centro de la estación medido desde delante)
         self.f3_patas = []          # patas de la estación en el mundo: la parada de emergencia no para por ellas
+        self.f3_estacion = None     # (cx, cy, ang) de la estación a la que se va
+        self.f3_lados_descartados = []   # puntos de delante sin camino: no se vuelven a elegir
         self.t_pausa = None
         # Salida desde A, B, C o D. start_after quita los waypoints hasta ese inclusive. Con plan_at_start, el robot
         # parado junta start_scans scans para llenar la memoria de obstáculos y planifica desde la pose inicial.
@@ -911,6 +914,8 @@ class Fase1Node(Node):
         if inflado is None:
             self.get_logger().warn(f'Sin camino ({segundos:.2f} s): reintento en {self.reintento:.0f} s')
             self.escribir_log(x, y, th, 'SIN_CAMINO', segundos)
+            if self.cambiar_de_lado(x, y, th, ahora):
+                return
             if self.rodeo_rechazado is not None:
                 nuevo, antes = self.rodeo_rechazado
                 self.get_logger().warn(f'Rodeo de {nuevo:.1f} m (quedaban {antes:.1f} m): espero')
@@ -966,11 +971,16 @@ class Fase1Node(Node):
     def ir_delante(self, x, y, th, cx, cy, ang, nombre):
         # Objetivo: el punto a phase3_front_dist del centro (cx, cy), perpendicular al lado (ángulo ang + k·90°) más
         # cercano al robot que tenga holgura en el mapa, mirando al centro. Sin ninguno, FASE_III_SIN_HUECO y para.
+        # La holgura incluye los obstáculos que ha visto el LiDAR: un panel justo delante de un lado lo descarta
+        obst = [(v[0], v[1]) for v in self.obstaculos.values()]
+        holgura = pl.holgura_con_obstaculos(self.holgura, self.meta, obst, self.margen_plan, self.holgura_objetivo)
+        self.f3_estacion = (cx, cy, ang)
         delante = []
         for k in range(4):
             a = ang + k * math.pi / 2
             px, py = cx + self.f3_dist * math.cos(a), cy + self.f3_dist * math.sin(a)
-            if pl.holgura_en(self.holgura, self.meta, px, py) > self.inflado:
+            descartado = any(math.hypot(px - qx, py - qy) < 0.05 for qx, qy in self.f3_lados_descartados)
+            if not descartado and pl.holgura_en(holgura, self.meta, px, py) > self.inflado:
                 delante.append((math.hypot(px - x, py - y), px, py))
         if not delante:
             self.get_logger().warn('FASE III: ningún lado de la estación tiene sitio delante; no hago nada')
@@ -987,6 +997,21 @@ class Fase1Node(Node):
         self.get_logger().info(f'FASE III: a ({px:.2f}, {py:.2f}), delante de la estación ({cx:.2f}, {cy:.2f})')
         if math.hypot(px - x, py - y) > self.plan_final_dist:
             self.planificar_final(x, y, th, nombre)
+
+    def cambiar_de_lado(self, x, y, th, ahora):
+        # Fase III, yendo al punto de delante de la estación: si lleva phase3_side_wait s sin camino (un obstáculo lo
+        # tapa), se descarta ese lado y se va al siguiente. Con phase3_side_wait 0 no se cambia nunca. Devuelve True si
+        # ha cambiado de objetivo.
+        if (self.fase != 'III' or self.f3_espera_lado <= 0.0 or self.f3_estacion is None
+                or ahora - self.t_sin_camino < self.f3_espera_lado or not self.objetivos):
+            return False
+        px, py = self.objetivos[-1][1], self.objetivos[-1][2]
+        self.f3_lados_descartados.append((px, py))
+        self.get_logger().warn(f'FASE III: sin camino a ({px:.2f}, {py:.2f}); pruebo otro lado de la estación')
+        self.escribir_log(x, y, th, 'FASE3_OTRO_LADO', None, px, py)
+        self.t_sin_camino = None
+        self.ir_delante(x, y, th, *self.f3_estacion, 'FASE3')
+        return True
 
     def juntar_patas(self, max_rayos):
         # Con el robot parado, guarda los pilares de cada scan nuevo en el frame del LiDAR, sin usar la pose. Al juntar

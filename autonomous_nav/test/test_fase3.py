@@ -56,13 +56,15 @@ def nodo(estado='MEDIR3'):
     n = SimpleNamespace(
         estado=estado, fase='III', scan=None, f3_scans=[], f3_ultimo_scan=None, f3_n=20, f3_intentos=0,
         f3_intentos_max=3, f3_max_desvio=0.25, f3_centro=None, f3_patas=[], f3_v=0.05, f3_tol=0.01, f3_dist=0.80,
-        f3_radio_pata=0.07, f3_tol_aparcado=0.03, f3_max_desalineado=math.radians(6.0), estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5,
+        f3_radio_pata=0.07, f3_tol_aparcado=0.03, f3_max_desalineado=math.radians(6.0), f3_espera_lado=10.0,
+        f3_estacion=None, f3_lados_descartados=[], obstaculos={}, margen_plan=0.10, holgura_objetivo=0.60,
+        t_sin_camino=None, estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5,
         max_w=0.4, angulo_girar=0.17, cono=math.radians(30), stop_distance=0.30, tol_obligatorio=0.02,
         estaciones=[{'tipo': 'cuadrada', 'x': C[0] + 0.05, 'y': C[1] - 0.04, 'ang': 0.0, 'vistas': 9}],
         estacion_confirmar=5, inflado=0.25, plan_final_dist=0.30, fase2_max_v=0.12,
         get_logger=lambda: SimpleNamespace(info=lambda *a: None, warn=lambda *a: None),
         escribir_log=lambda x, y, th, ev, *a: log.append((ev, a)))
-    for m in ('juntar_patas', 'estacion_cuadrada', 'es_pata', 'ir_delante'):
+    for m in ('juntar_patas', 'estacion_cuadrada', 'es_pata', 'ir_delante', 'cambiar_de_lado'):
         setattr(n, m, (lambda f: lambda *a: f(n, *a))(getattr(Fase1Node, m)))
     return n, log
 
@@ -195,3 +197,37 @@ def test_desalineado_no_entra_y_se_recoloca():
     assert n.estado == 'GIRAR' and n.f3_intentos == 1
     px, py = n.objetivos[0][1:3]
     assert (px, py) == pytest.approx((C[0] - 0.80 * math.cos(g), C[1] - 0.80 * math.sin(g)), abs=0.01)
+
+
+def nodo_delante():
+    n, log = nodo('PAUSA')
+    n.holgura, n.meta = np.full((200, 200), 1.0), {'resolucion': 0.05, 'origen_x': 0.0, 'origen_y': 10.0}
+    n.planificar_final = lambda *a: log.append(('PLAN', a))
+    return n, log
+
+
+def test_panel_delante_del_lado_mas_cercano_elige_otro():
+    # Simulación (semilla 01309): un panel a ~0.2 m del punto de delante del lado -X. Antes se elegía igual (solo
+    # miraba el mapa) y se quedaba SIN_CAMINO para siempre
+    n, log = nodo_delante()
+    cx, cy = C[0] + 0.05, C[1] - 0.04
+    n.obstaculos = {(0, i): [cx - 0.80 + 0.15 * math.cos(a), cy + 0.15 * math.sin(a), 0.0, 0]
+                    for i, a in enumerate(np.linspace(0, 2 * math.pi, 12))}
+    Fase1Node.empezar_fase3(n, 3.34, 15.70, 0.0)
+    px, py = n.objetivos[0][1:3]
+    assert math.hypot(px - (cx - 0.80), py - cy) > 0.5          # no el lado -X
+    assert math.hypot(px - cx, py - cy) == pytest.approx(0.80)
+
+
+def test_sin_camino_un_rato_cambia_de_lado():
+    n, log = nodo_delante()
+    Fase1Node.empezar_fase3(n, 3.34, 15.70, 0.0)
+    primero = n.objetivos[0][1:3]
+    n.estado, n.t_sin_camino = 'ESPERAR', 100.0
+    assert Fase1Node.cambiar_de_lado(n, 6.0, 15.5, 0.0, 105.0) is False      # aún no: 5 s
+    assert Fase1Node.cambiar_de_lado(n, 6.0, 15.5, 0.0, 110.5) is True
+    assert n.objetivos[0][1:3] != primero and n.estado == 'GIRAR'
+    assert ('FASE3_OTRO_LADO', (None, primero[0], primero[1])) in log
+    # Con phase3_side_wait 0, como antes: no cambia nunca
+    n.f3_espera_lado, n.t_sin_camino = 0.0, 100.0
+    assert Fase1Node.cambiar_de_lado(n, 6.0, 15.5, 0.0, 500.0) is False
