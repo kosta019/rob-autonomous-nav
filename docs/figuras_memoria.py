@@ -210,6 +210,44 @@ def cobertura():
     plt.close(fig)
 
 
+# ---------- Figura: rodeo real de un obstáculo (06/11 13:40, silla junto a E) ----------
+
+def rodeo():
+    import csv
+    log = os.path.join(RAIZ, 'test_real', 'datos_20261106', 'mission_log_ruta_activo_silla_puerta.csv')
+    filas = list(csv.DictReader(open(log)))
+    x = [float(f['robot_x']) for f in filas]
+    y = [float(f['robot_y']) for f in filas]
+    ob = [(float(f['obstacle_x']), float(f['obstacle_y'])) for f in filas if f['event'] == 'OBSTACULO']
+    bl = [(float(f['obstacle_x']), float(f['obstacle_y'])) for f in filas if f['event'] == 'BLOQUEO']
+    fig, eje = plt.subplots(figsize=(10.5, 4.4))
+    # Plan global de ese día (ruta generada el 05/11): D -> D-E_1 -> E -> E-Door_1
+    px, py = [5.285, 5.015, 5.082, 5.115], [2.517, 6.005, 6.122, 7.005]
+    eje.add_patch(Rectangle((5.57, 5.51), 6.58 - 5.57, 5.90 - 5.51, facecolor=NARANJA, alpha=0.25, edgecolor=NARANJA,
+                            label='mesa pequeña (zona prohibida del mapa)'))
+    eje.plot([2.0, 8.0], [5.86, 5.86], color='black', linewidth=2, label='frente de los bancos (pared del mapa)')
+    eje.plot(py, px, '--', color=GRIS, linewidth=1.5, marker='o', markersize=4, label='plan global (sin obstáculos)')
+    eje.plot([o[1] for o in ob], [o[0] for o in ob], '.', color='tab:red', markersize=6,
+             label='obstáculos nuevos (OBSTACULO en el Mission Log)')
+    eje.plot([b[1] for b in bl], [b[0] for b in bl], 'x', color='darkred', markersize=9, mew=2,
+             label='obstáculo que bloquea la ruta (BLOQUEO)')
+    eje.plot(y, x, color=AZUL, linewidth=2, label='trayectoria del robot (pose del Mission Log)')
+    eje.plot(6.122, 5.082, 's', color='black', markersize=8)
+    eje.text(6.16, 5.16, 'E', fontsize=10, fontweight='bold')
+    eje.plot(6.038, 4.708, 'D', color=AZUL, markersize=7)
+    eje.text(5.75, 4.62, 'E~ (OBLIGATORIO_TAPADO, a 0.38 m de E)', fontsize=8, color=AZUL, ha='right')
+    eje.set_xlim(3.0, 8.0)
+    eje.set_ylim(6.1, 4.0)            # X hacia abajo, como en el enunciado
+    eje.set_xlabel('Y (m)')
+    eje.set_ylabel('X (m)')
+    eje.set_aspect('equal')
+    eje.grid(alpha=0.25)
+    eje.legend(loc='upper left', bbox_to_anchor=(1.01, 1.0), fontsize=8)
+    fig.tight_layout()
+    fig.savefig(os.path.join(DOCS, 'fig_rodeo.png'), dpi=150)
+    plt.close(fig)
+
+
 # ---------- Figura: mapa entregable del SLAM ----------
 
 def mapa_slam():
@@ -263,3 +301,4 @@ if __name__ == '__main__':
     estados()
     cobertura()
     mapa_slam()
+    rodeo()
