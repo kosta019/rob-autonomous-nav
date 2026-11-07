@@ -8,7 +8,7 @@
 cd "$(dirname "$0")/.." || exit 1
 DIR=$(mktemp -d)
 P=autonomous_nav
-PAQUETE="$P/package.xml $P/setup.py $P/setup.cfg $P/resource
+PAQUETE="$P/README.md $P/LICENSE $P/package.xml $P/setup.py $P/setup.cfg $P/resource
   $P/autonomous_nav/__init__.py $P/autonomous_nav/fase1_node.py $P/autonomous_nav/planificador.py
   $P/autonomous_nav/pilares.py $P/autonomous_nav/comprobar_pose.py $P/autonomous_nav/scan_slam.py
   $P/config/fase1.yaml $P/config/fase1_ruta.yaml $P/config/real.yaml $P/config/slam.yaml

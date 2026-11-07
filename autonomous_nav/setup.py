@@ -23,11 +23,10 @@ setup(
     maintainer='Marc Costa',
     maintainer_email='marc.costa.brusco@gmail.com',
     description='Proyecto ROB: navegación autónoma del TurtleBot3 Burger',
-    license='TODO',
+    license='MIT',
     entry_points={
         'console_scripts': [
             'fase1_node = autonomous_nav.fase1_node:main',
-            'prueba_rumbo = autonomous_nav.prueba_rumbo:main',
             'comprobar_pose = autonomous_nav.comprobar_pose:main',
             'scan_slam = autonomous_nav.scan_slam:main',
         ],

@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>Proyecto ROB: navegación autónoma del TurtleBot3 Burger (fases I, II y III)</description>
   <maintainer email="marc.costa.brusco@gmail.com">Marc Costa</maintainer>
-  <license>TODO</license>
+  <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
@@ -14,13 +14,10 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
-  <!-- Para los launch (SLAM y simulación) -->
+  <!-- Para el launch del SLAM -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
-  <exec_depend>ros_gz_sim</exec_depend>
-  <exec_depend>ros_gz_bridge</exec_depend>
-  <exec_depend>turtlebot3_gazebo</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
