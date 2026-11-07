@@ -1,6 +1,6 @@
 # Parámetros para el robot REAL (tercer --params-file). Orden de los ficheros, cada uno
 # sobrescribe al anterior:
-#   fase1.yaml, fase1_ruta.yaml, real.yaml y, si existe, initial_pose_corregida.yaml el último.
+#   fase1.yaml, fase1_ruta.yaml, real.yaml (y, si se usa, initial_pose_corregida.yaml el último: ya no hace falta).
 # A 0.08 m/s la ruta completa dura unos 4-5 min.
 fase1_node:
   ros__parameters:
@@ -47,3 +47,6 @@ fase1_node:
     corridor_wall_value: [17.15]
     corridor_wall_from: [-0.55]
     corridor_wall_to: [9.57]
+    # Pose de salida con el LiDAR al arrancar (07/11): ya no hace falta comprobar_pose --escribir (sigue valiendo para
+    # mirar los avisos antes). Eventos POSE_INICIAL / POSE_INICIAL_RECHAZADA en el Mission Log.
+    start_pose_check: true

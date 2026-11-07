@@ -56,40 +56,37 @@ mkdir -p ~/ros2_ws/mapas && cd ~/ros2_ws/mapas && ros2 launch slam_toolbox onlin
 
 ### 3.1 Salida desde A
 
-Robot sobre la cruz de A, mirando a +X (de espaldas a la pared del fondo, hacia B), nadie a menos de 1 m.
-```bash
-ros2 run autonomous_nav comprobar_pose $CFG/fase1.yaml $CFG/real.yaml --escribir
-```
-Tiene que acabar con `Escrito initial_pose_corregida.yaml` **sin ningún AVISO** (pose ≈ (0.70, 0.91, ~1°)). Luego:
+Robot sobre la cruz de A, mirando a +X (de espaldas a la pared del fondo, hacia B), **a ojo basta (±10°)**, nadie a
+menos de 1 m ni delante de las paredes.
 ```bash
 ros2 run autonomous_nav fase1_node --ros-args \
-  --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml \
-  --params-file initial_pose_corregida.yaml
+  --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml
 ```
+**Pose de salida automática (07/11, `start_pose_check` en `real.yaml`):** antes de moverse, parado ~5 s, el nodo hace lo
+que hacía `comprobar_pose --escribir`: corrige el rumbo y la posición con las paredes del mapa y comprueba el giróscopo.
+- `POSE_INICIAL dx= dy= dth= ... paredes XY n= rms=`: corregida; sale. En A, ≈ (0.69, 0.91, −0.4°).
+- `POSE_INICIAL_RECHAZADA <motivo>`: **no se mueve** y lo repite cada ~5 s. `giroscopo`: Ctrl+C, apagar y encender la
+  OpenCR con el robot quieto. `grande`: el robot está a más de 10° o 15 cm de `initial_pose` (recolocarlo). `pocos_puntos`
+  o `sin_paredes_rumbo`: algo tapa las paredes (apartarse). `residuo`: recolocarlo.
+- 07/11, bag de las 15:47: con alguien cerca tapando parte de las paredes, la X salió 3.5 cm distinta (el rumbo y la Y,
+  igual). Por eso: nadie junto al robot mientras está parado al principio.
+
+`comprobar_pose` sigue valiendo para mirar la pose y los avisos antes de lanzar (sin `--escribir`). Si se pasa un
+`initial_pose_corregida.yaml` antiguo como último `--params-file`, la corrección automática parte de esa pose.
 
 ### 3.2 Salida desde B, C o D
 
-Robot sobre la cruz, **mirando a +X** (hacia D). Si el profesor da otro ángulo θ, cambiarlo en `initial_pose` del
-fichero de esa salida (`test_real/salida_B.yaml`, `salida_C.yaml` o `salida_D.yaml`, en radianes).
+Robot sobre la cruz, **mirando a +X** (hacia D), a ojo (±10°). Si el profesor da otro ángulo θ, cambiarlo en
+`initial_pose` del fichero de esa salida (`test_real/salida_B.yaml`, `salida_C.yaml` o `salida_D.yaml`, en radianes).
 ```bash
 S=src/rob-autonomous-nav/test_real/salida_C.yaml          # o salida_B.yaml / salida_D.yaml
-ros2 run autonomous_nav comprobar_pose $CFG/fase1.yaml $CFG/real.yaml $S --escribir
-```
-- **Sin AVISO:** ya está escrito `initial_pose_corregida.yaml`.
-- **Con AVISO "solo hay paredes de un eje"** (típico en C: los paneles tapan la pared del fondo): no escribe el fichero.
-  Escribirlo a mano con la X de la cruz y la Y y θ que dice `Pose estimada` (ejemplo del 06/11 en C):
-  ```bash
-  printf 'fase1_node:\n  ros__parameters:\n    initial_pose: [2.078, 2.544, 0.0263]\n' > initial_pose_corregida.yaml
-  ```
-  En B pasa lo mismo (solo ve las paredes del eje Y). 06/11: `[3.102, 1.729, 0.0314]`. Cruces: B (3.102, 1.722),
-  C (2.078, 2.517), D (5.285, 2.517).
-- **Con AVISO de ecos a < 0.20 m:** si hay un panel pegado al robot es normal; si no, limpiar la ventana del LiDAR.
-
-```bash
 ros2 run autonomous_nav fase1_node --ros-args \
-  --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml \
-  --params-file $S --params-file initial_pose_corregida.yaml
+  --params-file $CFG/fase1.yaml --params-file $CFG/fase1_ruta.yaml --params-file $CFG/real.yaml --params-file $S
 ```
+La pose de salida se corrige sola, como en A. En B y C los paneles tapan la pared del fondo: corrige el rumbo y la Y, y la
+X se queda la de la cruz (`(X sin paredes: la de initial_pose)` en `POSE_INICIAL`; antes se escribía a mano). Comprobado
+con los bags del 06/11: B (3.102, 1.729, +1.77°) y C (2.078, 2.543, +1.54°), lo mismo que a mano. `AVISO_ECOS`: si hay un
+panel pegado al robot es normal; si no, limpiar la ventana del LiDAR.
 Se queda ~1 s parado mirando alrededor (`PLAN_SALIDA ... obstaculos=N`) y sale esquivando los paneles. Si sale
 `SALIDA_SIN_CAMINO`: los huecos entre paneles son de menos de ~0.6 m; espera y reintenta solo cada 5 s.
 
@@ -111,6 +108,8 @@ con la esquina, se acerca ~20 cm y repite) → gira a θ = 0 → `FASE I COMPLET
 
 | Mensaje | Qué es | Qué hacer |
 |---|---|---|
+| `POSE_INICIAL ...` | pose de salida corregida con las paredes (parado, antes de moverse) | nada |
+| `POSE_INICIAL_RECHAZADA <motivo>` | no se fía de la pose de salida: no se mueve y reintenta | ver 3.1 |
 | `RELOC ... Y=canaleta`, `RELOC_Q ...` | relocalizaciones normales | nada |
 | `RELOC_PARCIAL` + `SIN_CAMINO` en la puerta | alguien tapa el final de la canaleta | nada: `RELOC_REINTENTO` cada 5 s, en cuanto se aparta sigue |
 | `BLOQUEO` / `REPLANIFICACION` | obstáculo en la ruta | nada |

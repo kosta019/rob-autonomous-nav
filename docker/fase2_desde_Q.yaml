@@ -3,6 +3,7 @@
 fase1_node:
   ros__parameters:
     initial_pose: [8.970, 14.497, 0.0]
+    start_pose_check: false     # en el pasillo el mapa está mal: la pose de Q viene de la RELOC_Q
     waypoint_names: ["Q"]
     waypoints_x: [8.970]
     waypoints_y: [14.497]

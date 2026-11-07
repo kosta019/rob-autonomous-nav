@@ -34,6 +34,15 @@ fase1_node:
     plan_at_start: false         # true: parado, junta start_scans scans (obstáculos) y planifica desde la pose inicial.
                                  #   Para B, C y D (paneles de madera movibles por la zona de salida). Desde A no hace falta
     start_scans: 6               # a 5 Hz, ~1.2 s
+    # Pose de salida con el LiDAR (estado POSE_INICIAL, parado, antes de moverse): lo de comprobar_pose --escribir. Corrige
+    # el rumbo (paredes de pose_heading_axis) y cada coordenada de la que vea paredes; si no vale, no se mueve y reintenta.
+    # Apagado aquí (en el mundo vacío de Gazebo no hay paredes); en el robot real lo enciende real.yaml.
+    start_pose_check: false
+    start_pose_scans: 25         # como comprobar_pose (mediana de cada rayo)
+    start_pose_min_points: 30    # puntos de pared en total
+    start_pose_max_rms: 0.02     # m. 07/11, salida B con el rumbo de partida 15° mal: resultado falso con 2.2 cm
+    start_pose_max_corr: 0.15    # m
+    start_pose_max_angle_deg: 10.0   # grados: converge desde ±10° en A, B y C (bags del 06/11); más, rechaza
     final_plan_dist: 0.30        # m: si la pose final queda más lejos del último obligatorio (Q), se planifica hasta ella
     k_angular: 1.5               # w = k_angular * error_angulo, limitada a max_angular_speed
     turn_in_place_angle: 0.17    # rad (~10 grados): con más error, girar sin avanzar

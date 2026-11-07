@@ -258,6 +258,29 @@ def ajuste_paredes(px, py, paredes, ventana, sig_medida, sig_xy, min_puntos):
     return d['x'], d['y'], n['x'], n['y']
 
 
+def revisar_pose_inicial(pose, estimada, resumen, eje_rumbo, min_puntos, max_rms, max_corr, max_ang):
+    # Con la pose de salida dada (initial_pose) y la estimada con las paredes del mapa (comprobar_pose.estimar, con el
+    # robot parado): qué se aplica y si vale. El rumbo, si se han visto paredes del eje del rumbo (eje_rumbo; '' =
+    # cualquiera); cada coordenada, solo si se han visto paredes de ese eje (en B y C solo se ven las del eje Y: la X
+    # se queda la de la cruz, como se hacía a mano con comprobar_pose).
+    # Devuelve (x, y, th, motivo): motivo '' si vale; si no, por qué no (y la pose dada sin tocar).
+    x, y, th = pose
+    ejes = {c['eje'] for c in resumen}
+    n = sum(c['n'] for c in resumen)
+    if not resumen or (eje_rumbo and eje_rumbo not in ejes):
+        return x, y, th, 'sin_paredes_rumbo'
+    if n < min_puntos:
+        return x, y, th, 'pocos_puntos'
+    if max(c['rms'] for c in resumen) > max_rms:
+        return x, y, th, 'residuo'
+    nx = estimada[0] if 'X' in ejes else x
+    ny = estimada[1] if 'Y' in ejes else y
+    nth = normalizar(estimada[2])
+    if math.hypot(nx - x, ny - y) > max_corr or abs(normalizar(nth - th)) > max_ang:
+        return x, y, th, 'grande'
+    return nx, ny, nth, ''
+
+
 def quitar_hasta(objetivos, nombre):
     # La lista de objetivos sin los que van hasta 'nombre' inclusive (salida desde B, C o D). '' o un nombre que no está:
     # la lista entera.
@@ -556,6 +579,24 @@ class Fase1Node(Node):
             self.estado = 'INICIO'
         self.salida_scans = 0
         self.salida_ultimo_scan = None
+        # Pose de salida con el LiDAR (07/11): parado, antes de moverse, lo que hacía a mano comprobar_pose --escribir.
+        # El robot se coloca a ojo (rumbo a menos de ~10° de initial_pose) y el nodo corrige el rumbo y la posición con
+        # las paredes del mapa (estado POSE_INICIAL). Si no vale, no se mueve y lo reintenta con scans nuevos.
+        self.pi_activa = self.declare_parameter('start_pose_check', Parameter.Type.BOOL).value
+        self.pi_n = self.declare_parameter('start_pose_scans', Parameter.Type.INTEGER).value
+        self.pi_min_puntos = self.declare_parameter('start_pose_min_points', Parameter.Type.INTEGER).value
+        self.pi_max_rms = self.declare_parameter('start_pose_max_rms', D).value
+        self.pi_max_corr = self.declare_parameter('start_pose_max_corr', D).value
+        self.pi_max_ang = math.radians(self.declare_parameter('start_pose_max_angle_deg', D).value)
+        self.pi_eje_rumbo = self.declare_parameter('pose_heading_axis', Parameter.Type.STRING).value
+        self.pi_scans = []          # scans juntados en POSE_INICIAL (con el valor nan = sin dato)
+        self.pi_wz = []             # y, mientras, el giro de /imu y el rumbo de /odom (con el robot quieto: ~0)
+        self.pi_yaws = []
+        self.pi_ultimo_scan = None
+        self.estado_tras_pose = self.estado   # INICIO o GIRAR
+        if self.pi_activa:
+            self.caras = cp.cargar_caras()
+            self.estado = 'POSE_INICIAL'
 
         # 3. Estimación de la pose (odometría + giróscopo) y cuándo llegó cada sensor (reloj del nodo)
         self.odom_anterior = None   # última lectura de /odom: (x, y, theta) en el sistema de /odom
@@ -637,6 +678,8 @@ class Fase1Node(Node):
             th_medio = th_antes + 0.5 * normalizar(self.th_rel - th_antes)
             self.x_rel += ds * math.cos(th_medio)
             self.y_rel += ds * math.sin(th_medio)
+        if self.estado == 'POSE_INICIAL':
+            self.pi_yaws.append(th)
         self.odom_anterior = (x, y, th)
         self.t_odom = self.get_clock().now()
 
@@ -653,6 +696,8 @@ class Fase1Node(Node):
                 self.hueco_imu = dt
                 self.get_logger().warn(f'Hueco de {dt:.2f} s en /imu')
         self.t_imu_anterior = t
+        if self.estado == 'POSE_INICIAL':
+            self.pi_wz.append(msg.angular_velocity.z)
         self.t_imu = self.get_clock().now()
 
     def scan_callback(self, msg):
@@ -937,6 +982,53 @@ class Fase1Node(Node):
         self.get_logger().info(f'Plan desde la salida con inflado {inflado:.2f}: {[o[0] for o in self.objetivos]}')
         self.escribir_log(x, y, th, f'PLAN_SALIDA inflado={inflado:.2f} obstaculos={len(self.obstaculos)}', segundos)
         self.estado = 'GIRAR'
+
+    def pose_inicial_lidar(self, x, y, th):
+        # Estado POSE_INICIAL (robot parado, antes de moverse): start_pose_scans scans nuevos, su mediana y la pose con
+        # las paredes del mapa (comprobar_pose.estimar), y revisar_pose_inicial decide qué se aplica. Si no vale, o si el
+        # giróscopo marca giro con el robot quieto, no se mueve: POSE_INICIAL_RECHAZADA y otra vez con scans nuevos.
+        msg = self.scan
+        if msg is self.pi_ultimo_scan:
+            return                  # el timer va más rápido que el LiDAR: cada scan una vez
+        self.pi_ultimo_scan = msg
+        r = np.array(msg.ranges, dtype=float)
+        r[~np.isfinite(r) | (r < msg.range_min) | (r > msg.range_max)] = np.nan   # sin dato
+        self.pi_scans.append(r)
+        if len(self.pi_scans) < self.pi_n:
+            return
+        info = (msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
+        xe, ye, the, resumen = cp.estimar((x, y, th), self.lidar_offset_x, cp.mediana_de_scans(self.pi_scans), info,
+                                          self.caras, self.pi_eje_rumbo)
+        the -= self.lidar_yaw_offset     # las paredes dan el rumbo del LiDAR; el del robot es ese menos el desfase
+        nx, ny, nth, motivo = revisar_pose_inicial((x, y, th), (xe, ye, the), resumen, self.pi_eje_rumbo,
+                                                   self.pi_min_puntos, self.pi_max_rms, self.pi_max_corr, self.pi_max_ang)
+        giro = cp.aviso_giroscopo(self.pi_wz, self.pi_yaws)
+        if not motivo and giro:
+            motivo = 'giroscopo'
+        ejes = ''.join(sorted({c['eje'] for c in resumen}))
+        n = sum(c['n'] for c in resumen)
+        rms = max([c['rms'] for c in resumen] or [0.0])
+        medido = (f'estimada ({xe:.3f}, {ye:.3f}, {math.degrees(the):+.2f}°) paredes {ejes or "-"} n={n} '
+                  f'rms={rms * 100:.1f}cm')
+        ecos = cp.fraccion_con_ecos(self.pi_scans, self.alcance_min_obstaculos)
+        self.pi_scans, self.pi_wz, self.pi_yaws = [], [], []
+        if ecos > cp.ECOS_MAX:
+            self.get_logger().warn(f'El {ecos * 100:.0f} % de los scans ve algo a menos de '
+                                   f'{self.alcance_min_obstaculos:.2f} m: ¿ventana del LiDAR sucia o algo pegado?')
+            self.escribir_log(x, y, th, f'AVISO_ECOS {ecos:.2f}')
+        if motivo:
+            texto = f'{motivo} {medido}' + (f' ({giro})' if motivo == 'giroscopo' else '')
+            self.get_logger().warn(f'Pose de salida no válida: {texto}. No me muevo; repito con scans nuevos')
+            self.escribir_log(x, y, th, f'POSE_INICIAL_RECHAZADA {texto}')
+            return
+        texto = (f'dx={nx - x:+.3f} dy={ny - y:+.3f} dth={math.degrees(normalizar(nth - th)):+.2f} {medido}'
+                 + ('' if 'X' in ejes else ' (X sin paredes: la de initial_pose)')
+                 + ('' if 'Y' in ejes else ' (Y sin paredes: la de initial_pose)'))
+        self.get_logger().info(f'Pose de salida: ({nx:.3f}, {ny:.3f}, {math.degrees(nth):+.2f}°): {texto}')
+        self.fijar_pose(nx, ny, nth)
+        self.escribir_log(nx, ny, nth, f'POSE_INICIAL {texto}', math.hypot(nx - x, ny - y))
+        self.obstaculos = {}
+        self.estado = self.estado_tras_pose
 
     def replanificar(self, x, y, sustituir=False, largo=True):
         # Desde la pose actual hasta el siguiente punto obligatorio (o la pose final), pasando por las
@@ -1229,8 +1321,9 @@ class Fase1Node(Node):
 
         # 2. Obstáculos nuevos (paso 3): si bloquean la ruta, parar y pasar a ESPERAR
         ahora_s = self.get_clock().now().nanoseconds * 1e-9
-        self.actualizar_obstaculos(x, y, th, ahora_s)
-        self.detectar_pilares(x, y, th, ahora_s)
+        if self.estado != 'POSE_INICIAL':       # con la pose de salida aún sin corregir, nada a la memoria ni al log
+            self.actualizar_obstaculos(x, y, th, ahora_s)
+            self.detectar_pilares(x, y, th, ahora_s)
         if self.estado in ('GIRAR', 'AVANZAR'):
             bloqueo = self.ruta_bloqueada(x, y)
             if bloqueo is not None and self.reloc_adelantable(x, y):
@@ -1254,6 +1347,9 @@ class Fase1Node(Node):
         elif self.estado == 'INICIO':
             v, w = 0.0, 0.0
             self.inicio(x, y, th, ahora_s)
+        elif self.estado == 'POSE_INICIAL':
+            v, w = 0.0, 0.0
+            self.pose_inicial_lidar(x, y, th)
         else:
             v, w = self.maquina_estados(x, y, th)
 

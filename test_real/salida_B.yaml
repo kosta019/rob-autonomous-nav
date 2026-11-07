@@ -1,6 +1,6 @@
 # Salida desde B (06/11): robot sobre la cruz de B mirando a +X (hacia D). Último --params-file antes de
 # initial_pose_corregida.yaml. plan_at_start: parado, mira alrededor (paneles de madera) y planifica desde aquí.
-#   comprobar_pose: ros2 run autonomous_nav comprobar_pose $CFG/fase1.yaml $CFG/real.yaml src/rob-autonomous-nav/test_real/salida_B.yaml --escribir
+#   La pose de salida (rumbo e Y; la X, la de la cruz si no ve el fondo) la corrige el nodo al arrancar (start_pose_check).
 fase1_node:
   ros__parameters:
     initial_pose: [3.102, 1.722, 0.0]

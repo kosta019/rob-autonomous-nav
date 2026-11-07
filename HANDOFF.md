@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **126 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **132 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -70,7 +70,12 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
      (±0.3 cm) y en P Base habría corregido los ~15 cm. Detalle y medidas para el lunes (predicción: de la cruz de
      P Base a la pared del tramo ancho ≈ 2.41 m; el extremo X −0.55) en `docs/analisis_pasillo_20261107.md`. Las
      paredes que se midan se añaden en `real.yaml` (`corridor_wall_*`), sin tocar código.
-  2. Rumbo inicial automático al arrancar, parado (lo de `comprobar_pose --escribir`), antes de moverse.
+  2. **HECHO (07/11, sin probar en el robot):** pose de salida automática. Estado `POSE_INICIAL` (parado, 25 scans):
+     `comprobar_pose.estimar` contra las paredes del mapa; rumbo siempre y cada coordenada solo si ve paredes de su eje
+     (`revisar_pose_inicial`); giróscopo comprobado. Si no vale (`POSE_INICIAL_RECHAZADA <motivo>`), no se mueve y
+     reintenta. `start_pose_check: true` en `real.yaml` (falso en `fase1.yaml` y en las pruebas desde Q). Converge con el
+     robot a ±10° del θ dado. Con los bags del 06/11, B y C dan lo mismo que a mano; en A, con alguien tapando paredes, la
+     X sale 3.5 cm distinta (README_DEMO 3.1).
   3. Nodo que reenvía /scan a /scan_slam con el sello −0.1 s, para slam_toolbox (mapa entregable). Comprobar que el
      mapa muestra las patas de la estación (el enunciado lo pide: "charging station pillars").
   4. Fase III: P Base → delante de R → alinearse con las patas (pose relativa a ellas) → entrar entre las dos de
