@@ -50,3 +50,20 @@ mapa oficial (16.90).
    corregir el mapa con las paredes medidas con cinta (pared del extintor Y 17.15, pared de Q 13.997, fondo X 9.57).
 2. **Mapa entregable:** slam_toolbox con el scan resellado −0.1 s (un nodo pequeño que reenvía /scan con el sello
    corregido) o sin emparejar scans. Hay que grabarlo de nuevo en el laboratorio, con el mismo bag como respaldo.
+
+## 07/11: mapa entregable con el scan resellado (`launch/slam.launch.py`)
+
+Decidido: el nodo `scan_slam` reenvía `/scan` a `/scan_slam` con el sello −0.1 s, y slam_toolbox (parámetros por defecto,
+`config/slam.yaml`, solo cambia `scan_topic`) lee ese. Comprobado pasando el bag del ensayo (16:31) por el launch tal cual
+(`docker/slam/mapa_bag.sh fase1_20261106_163111 entregable`): el mapa sale recto (el del laboratorio tenía el pasillo
+girado).
+
+![mapa con scan_slam](mapa_slam_scan_slam_20261107.png)
+
+**Las patas de las estaciones salen en el mapa** (el enunciado pide "charging station pillars"): entre las celdas
+ocupadas sueltas del pasillo, el detector de pilares encuentra R como cuadrada (4 celdas, 44 cm, −0.6°) y T como
+triangular. En el marco del mapa, R queda a ~0.23 m de la cinta: el SLAM se localiza peor que el nodo en el pasillo (por
+eso no se usa para navegar), pero el mapa es coherente.
+
+![patas en el mapa](mapa_slam_estaciones_20261107.png)
+

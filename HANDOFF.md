@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **147 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **148 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -77,7 +77,10 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
      robot a ±10° del θ dado. Con los bags del 06/11, B y C dan lo mismo que a mano; en A, con alguien tapando paredes, la
      X sale 3.5 cm distinta (README_DEMO 3.1).
   3. Nodo que reenvía /scan a /scan_slam con el sello −0.1 s, para slam_toolbox (mapa entregable). Comprobar que el
-     mapa muestra las patas de la estación (el enunciado lo pide: "charging station pillars").
+     mapa muestra las patas de la estación (el enunciado lo pide: "charging station pillars"). **HECHO (07/11):** `scan_slam` +
+     `config/slam.yaml` + `launch/slam.launch.py` (terminal 2 de README_DEMO). Con el bag de las 16:31: mapa recto y con
+     las patas de R (cuadrado de 44 cm) y de T (`docs/analisis_slam_20261106.md`, sección del 07/11). Falta grabarlo en el
+     laboratorio el lunes.
   4. Fase III: P Base → delante de R → alinearse con las patas (pose relativa a ellas) → entrar entre las dos de
      delante → parar con el centro a ≤ 3 cm de la cruz. La parada de emergencia no puede saltar por las patas
      laterales ya conocidas. Desarrollar con `bag_fase1_20261106_171005`. El usuario la prueba el lunes; si choca, no

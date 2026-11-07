@@ -17,6 +17,7 @@
   <!-- Solo para la simulación (launch/laboratorio.launch.py) -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>turtlebot3_gazebo</exec_depend>

@@ -50,8 +50,9 @@ cd ~/ros2_ws && CFG=src/rob-autonomous-nav/autonomous_nav/config
 ```bash
 # Terminal 1 (graba todo; parar con Ctrl+C al final). Comprueba que escribe "Grabando en ..."
 src/rob-autonomous-nav/test_real/grabar.sh
-# Terminal 2 (el mapa entregable se construye durante las fases I y II; arrancarlo con el robot en la salida)
-mkdir -p ~/ros2_ws/mapas && cd ~/ros2_ws/mapas && ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false
+# Terminal 2 (el mapa entregable se construye durante las fases I y II; arrancarlo con el robot en la salida).
+# scan_slam reenvía /scan a /scan_slam con el sello -0.1 s y slam_toolbox lee ese (config/slam.yaml): mapa recto.
+mkdir -p ~/ros2_ws/mapas && cd ~/ros2_ws/mapas && ros2 launch autonomous_nav slam.launch.py
 ```
 
 ## 3. Fase I (terminal 3)
