@@ -63,11 +63,22 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 - **Rumbo inicial automático (confirmado: es el rumbo del robot en la salida):** el θ de salida puede variar; el nodo
   debe corregirlo solo al arrancar, parado, con el LiDAR contra las paredes (lo que hoy hace a mano
   `comprobar_pose --escribir`), antes de moverse.
-- Pendientes de confirmar por el usuario: (1) localización en el pasillo con paredes medidas (`ajuste_mapa` ampliado;
-  el lunes medir con cinta la parte ancha Y 13.00 entre X 1.32-5.18 y el extremo X −0.55); (2) mapa entregable con
-  slam_toolbox y el scan resellado −0.1 s (nodo reenviador); (3) fase III hecha antes del lunes con
-  `bag_fase1_20261106_171005`; (4) acortar la fase II al confirmar la estación cuadrada; (5) θ en P Base mirando a la
-  estación.
+- **Confirmado por el usuario (07/11), a hacer antes del lunes, en este orden:**
+  1. Localización en el pasillo con sus paredes medidas: `ajuste_mapa` también en el pasillo, con el mapa de
+     distancias corregido con la cinta (extintor Y 17.15, pared de Q 13.997, fondo X 9.57). Comprobar con los bags
+     (R junto a la cinta, P Base junto a su cruz) antes de conectarlo; si no mejora, no conectarlo y avisar. El lunes
+     se miden la parte ancha (Y 13.00, X 1.32-5.18) y el extremo X −0.55.
+  2. Rumbo inicial automático al arrancar, parado (lo de `comprobar_pose --escribir`), antes de moverse.
+  3. Nodo que reenvía /scan a /scan_slam con el sello −0.1 s, para slam_toolbox (mapa entregable). Comprobar que el
+     mapa muestra las patas de la estación (el enunciado lo pide: "charging station pillars").
+  4. Fase III: P Base → delante de R → alinearse con las patas (pose relativa a ellas) → entrar entre las dos de
+     delante → parar con el centro a ≤ 3 cm de la cruz. La parada de emergencia no puede saltar por las patas
+     laterales ya conocidas. Desarrollar con `bag_fase1_20261106_171005`. El usuario la prueba el lunes; si choca, no
+     entra en el vídeo.
+  5. θ en P Base: mirando a la estación cuadrada encontrada (el enunciado no da θ de P Base).
+- **Descartado: acortar la fase II al encontrar R.** El enunciado: "Once the Corridor area is completely explored and
+  the station is identified, the robot has to return to Punt Base", y el mapa debe salir "during the completion of the
+  first two phases". Hay que explorar el pasillo entero, y el mapa entregable sale de esa misma ejecución.
 - Plan del lunes: 0:00 preparar PC/robot · 0:20 medir pasillo · 0:40 ensayo misión completa (bag + SLAM) · 1:30 fase III
   · 2:15 vídeo definitivo · 3:15 guardar todo. Prioridad: vídeo de fases I+II antes que la fase III.
 - Preguntas al profesor (el lunes al llegar): slam_toolbox, pose final de la fase I y su θ, si se mueven estaciones y
