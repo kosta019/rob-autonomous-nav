@@ -79,7 +79,15 @@ fase1_node:
     phase2_waypoint_names: ["P1_e", "P1_o", "P2_o", "P2_e"]
     phase2_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
     phase2_waypoints_y:    [14.35, 14.35, 15.55, 15.55]
-    phase2_final_pose: [3.34, 15.70, 0.0]   # P Base (enunciado; medida con cinta el 06/11: coincide). θ: TODO, sin dato
+    phase2_final_pose: [3.34, 15.70, 0.0]   # P Base (enunciado; medida con cinta el 06/11: coincide). θ: el enunciado no lo da;
+                                 #   con la estación cuadrada encontrada, mirando a ella (THETA_HACIA_ESTACION); si no, este
+    # Segunda cobertura (07/11): si tras la primera no está confirmada la estación cuadrada, estas pasadas antes de P Base
+    # (SEGUNDA_COBERTURA; si tampoco, ESTACION_NO_ENCONTRADA). Las de la primera desplazadas 0.30 m (Y 14.65 y 15.85): otros
+    # ángulos de vista de las patas y más cerca del lado del extintor. Holgura en el mapa >= 0.65 m en toda la ruta.
+    phase2_second_coverage: true
+    phase2_second_waypoint_names: ["S1_e", "S1_o", "S2_o", "S2_e"]
+    phase2_second_waypoints_x:    [8.80, 0.10, 0.10, 8.80]
+    phase2_second_waypoints_y:    [14.65, 14.65, 15.85, 15.85]
     phase2_max_linear_speed: 0.12   # m/s: estaciones y gente en cualquier sitio del pasillo
 
     # ---------- Pilares de las estaciones de carga (fase II, pilares.py) ----------

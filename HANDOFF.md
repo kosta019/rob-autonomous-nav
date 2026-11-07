@@ -34,7 +34,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **132 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **137 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -82,7 +82,8 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
      delante → parar con el centro a ≤ 3 cm de la cruz. La parada de emergencia no puede saltar por las patas
      laterales ya conocidas. Desarrollar con `bag_fase1_20261106_171005`. El usuario la prueba el lunes; si choca, no
      entra en el vídeo.
-  5. θ en P Base: mirando a la estación cuadrada encontrada (el enunciado no da θ de P Base).
+  5. **HECHO (07/11, sin probar en el robot):** θ en P Base mirando a la estación cuadrada confirmada
+     (`THETA_HACIA_ESTACION`); sin ella, el de `phase2_final_pose`.
 - **Descartado: acortar la fase II al encontrar R.** El enunciado: "Once the Corridor area is completely explored and
   the station is identified, the robot has to return to Punt Base", y el mapa debe salir "during the completion of the
   first two phases". Hay que explorar el pasillo entero, y el mapa entregable sale de esa misma ejecución.
@@ -93,7 +94,8 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   - *"completely explored and the station is identified"*: si al acabar la cobertura no se ha confirmado la cuadrada,
     hoy va igual a P Base y da la fase II por completada. **Decidido (07/11):** hacer una segunda cobertura (ruta en
     `config`, no en el código; p. ej. pasadas a otras Y para cubrir lo que la primera ve peor) y, si tampoco la
-    encuentra, registrarlo en el Mission Log (p. ej. `ESTACION_NO_ENCONTRADA`) y volver a P Base.
+    encuentra, registrarlo en el Mission Log (p. ej. `ESTACION_NO_ENCONTRADA`) y volver a P Base. **HECHO (07/11, sin probar en
+    el robot):** `phase2_second_*` (pasadas en Y 14.65 y 15.85), eventos `SEGUNDA_COBERTURA` y `ESTACION_NO_ENCONTRADA`.
   - El mapa entregable debe mostrar las patas de la estación (comprobar con el nodo del scan resellado).
   - Mission Log: pide obstáculos "within the passadis area"; hoy `OBSTACULO` se registra en toda la misión (con
     `current_phase`, se puede filtrar en el informe). Las patas de la cuadrada son `PILAR`; las de la triangular,

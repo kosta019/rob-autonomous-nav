@@ -565,6 +565,15 @@ class Fase1Node(Node):
         self.fase2_max_v = self.declare_parameter('phase2_max_linear_speed', D).value
         if not (len(self.fase2_nombres) == len(self.fase2_x) == len(self.fase2_y)):
             raise ValueError('phase2_waypoint_names, phase2_waypoints_x y phase2_waypoints_y: misma longitud')
+        # Segunda cobertura (07/11): si al acabar la primera no se ha confirmado la estación cuadrada, estas pasadas antes de
+        # P Base ("Once the Corridor area is completely explored and the station is identified": enunciado)
+        self.fase2b_activa = self.declare_parameter('phase2_second_coverage', Parameter.Type.BOOL).value
+        self.fase2b_nombres = self.declare_parameter('phase2_second_waypoint_names', SA).value
+        self.fase2b_x = self.declare_parameter('phase2_second_waypoints_x', DA).value
+        self.fase2b_y = self.declare_parameter('phase2_second_waypoints_y', DA).value
+        if not (len(self.fase2b_nombres) == len(self.fase2b_x) == len(self.fase2b_y)):
+            raise ValueError('phase2_second_waypoint_names, _x y _y: misma longitud')
+        self.cobertura = 1          # qué cobertura del pasillo se está haciendo (fase II)
         self.t_pausa = None
         # Salida desde B, C o D (06/11: la demo puede empezar en A, B, C o D, con paneles de madera movidos como obstáculos
         # por la zona de salida). start_after: se quitan los waypoints hasta ese inclusive (B para B y C; D para D).
@@ -934,6 +943,7 @@ class Fase1Node(Node):
         # pasada). Solo se planifica el primer tramo, y solo si queda lejos (la pose final de la fase I puede no ser Q):
         # planificar las pasadas las llevaría al centro del pasillo (el planificador busca holgura) y dejarían de cubrirlo.
         self.fase = 'II'
+        self.cobertura = 1
         self.objetivos = [(n, px, py, self.tol_waypoint) for n, px, py in zip(self.fase2_nombres, self.fase2_x,
                                                                               self.fase2_y)]
         self.objetivos.append(('final', self.fase2_final[0], self.fase2_final[1], self.tol_obligatorio))
@@ -947,6 +957,31 @@ class Fase1Node(Node):
         self.escribir_log(x, y, th, 'FASE II INICIO')
         if self.fase2_nombres and math.hypot(self.fase2_x[0] - x, self.fase2_y[0] - y) > self.plan_final_dist:
             self.planificar_final(x, y, th, 'FASE2')
+
+    def estacion_cuadrada(self):
+        # La estación de carga del enunciado (la cuadrada), si ya está confirmada (station_confirm_scans); si no, None
+        return next((e for e in self.estaciones if e['tipo'] == 'cuadrada' and e['vistas'] >= self.estacion_confirmar),
+                    None)
+
+    def fin_de_cobertura(self, x, y, th):
+        # Fase II, recién alcanzado el último punto de la cobertura (lo siguiente es P Base). Sin la estación cuadrada
+        # confirmada: la segunda cobertura (phase2_second_*), y si tampoco, ESTACION_NO_ENCONTRADA y a P Base igualmente.
+        if (self.fase != 'II' or self.i_objetivo >= len(self.objetivos) or self.objetivos[self.i_objetivo][0] != 'final'
+                or self.estacion_cuadrada() is not None):
+            return
+        if self.cobertura == 1 and self.fase2b_activa:
+            self.cobertura = 2
+            nuevos = [(n, px, py, self.tol_waypoint) for n, px, py in zip(self.fase2b_nombres, self.fase2b_x, self.fase2b_y)]
+            self.objetivos = self.objetivos[:self.i_objetivo] + nuevos + self.objetivos[self.i_objetivo:]
+            self.anclas = self.anclas + list(self.fase2b_nombres)
+            self.obligatorios = self.fase2b_nombres[:1]   # como en empezar_fase2: replanificar llega al primer punto
+            self.get_logger().warn(f'Sin estación cuadrada tras la cobertura: segunda cobertura {self.fase2b_nombres}')
+            self.escribir_log(x, y, th, 'SEGUNDA_COBERTURA')
+            if math.hypot(self.fase2b_x[0] - x, self.fase2b_y[0] - y) > self.plan_final_dist:
+                self.planificar_final(x, y, th, 'COBERTURA2')
+            return
+        self.get_logger().warn('Pasillo recorrido sin encontrar la estación cuadrada: vuelvo a P Base')
+        self.escribir_log(x, y, th, 'ESTACION_NO_ENCONTRADA')
 
     def planificar_final(self, x, y, th, nombre='FINAL'):
         # Planifica hasta el siguiente obligatorio (la pose final, o el primer punto de la fase II). Eventos del log:
@@ -1424,7 +1459,14 @@ class Fase1Node(Node):
                 self.get_logger().warn(f'{real} tapado: dado por alcanzado a {d_real:.2f} m')
                 self.escribir_log(x, y, th, f'OBLIGATORIO_TAPADO {real} {d_real:.3f}', d_real)
             self.i_objetivo += 1
+            self.fin_de_cobertura(x, y, th)
             self.estado = 'ORIENTAR' if self.i_objetivo == len(self.objetivos) else 'GIRAR'
+            est = self.estacion_cuadrada() if self.estado == 'ORIENTAR' and self.fase == 'II' else None
+            if est is not None:
+                # En P Base, mirando a la estación encontrada (el enunciado no da θ de P Base; así empieza la fase III)
+                th_est = math.atan2(est['y'] - y, est['x'] - x)
+                self.pose_final = [self.pose_final[0], self.pose_final[1], th_est]
+                self.escribir_log(x, y, th, f'THETA_HACIA_ESTACION {math.degrees(th_est):+.1f}', None, est['x'], est['y'])
             # Pose final asignada por el profesor (06/11: puede no ser Q). Si queda lejos del último obligatorio, se
             # planifica hasta ella (antes, línea recta: podía cruzar una pared). Sin camino: ESPERAR, que reintenta.
             sig = self.objetivos[self.i_objetivo] if self.i_objetivo < len(self.objetivos) else None

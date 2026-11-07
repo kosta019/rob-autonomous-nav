@@ -130,6 +130,10 @@ escribe `FASE II INICIO` y sigue con la ruta de cobertura de `fase1.yaml` (`phas
 (`FASE II COMPLETADA`). Desde ahí, `current_phase` es `II` en el Mission Log. Si la pose final de la fase I no está junto
 al primer punto de la ruta (P1_e), planifica hasta él (`PLAN_FASE2`; sin camino, `FASE2_SIN_CAMINO` y reintenta).
 Comprobado reproduciendo el bag del ensayo del 06/11 (`docker/reproducir_bag.sh`); **sin probar en el robot**.
+**Al acabar la cobertura (07/11, sin probar en el robot):** si no ha confirmado la estación cuadrada, hace una segunda
+cobertura (`SEGUNDA_COBERTURA`, pasadas en Y 14.65 y 15.85: `phase2_second_*`) y, si tampoco, escribe
+`ESTACION_NO_ENCONTRADA` y vuelve a P Base. En P Base se orienta **mirando a la estación cuadrada**
+(`THETA_HACIA_ESTACION <grados>`, con su centro en `obstacle_x/obstacle_y`); sin estación, al θ de `phase2_final_pose`.
 
 **Solo la fase II** (terminal 3, robot en Q donde acabó la fase I):
 ```bash
