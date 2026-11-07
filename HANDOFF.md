@@ -49,6 +49,30 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   que se ve al arrancar. Necesita huecos ≥ 0.6 m.
 - `/scan`: 5 Hz, `range_max` 3.5 m, ~1° por rayo: una pata da 2-3 puntos a ≤ 1.2 m.
 
+## Decisiones del usuario (07/11) y plan para el lunes 09/11 (3-4 h de laboratorio: solo pruebas, ajustes y vídeo)
+
+- **Diapositivas de clase en `docs/teoria/`** (fuera de git): Wheeled Mobile Robots, RM navigation, Sensors,
+  Localization and mapping. **Antes de seguir, comprobar cada técnica contra ellas** (con número de diapositiva):
+  detector de pilares (`pilares.py`: su comentario dice "teoría: extracción de características" SIN comprobar), la
+  corrección con paredes del pasillo, la fase III y el SLAM. Si algo no encaja, proponer la alternativa de clase.
+- El usuario revisa la rama `fase2-pilares` y la fusiona él en `main`.
+- Vídeo definitivo **desde A**. Pasillo a **0.12 m/s** en el primer vídeo; si va bien, se subirá.
+- Fase III: aparcado dado por bueno con el centro a **≤ 3 cm** de la cruz.
+- Mission Log: las patas salen como `OBSTACULO` (todos los puntos) y hay que **indicar cuáles de ellos son las patas**
+  (hoy, filas `PILAR` aparte con su posición; revisar que se pueda cruzar una cosa con la otra).
+- **"Asume que el ángulo puede moverse: corrección automática antes de empezar a moverse"**: PENDIENTE DE ACLARAR con
+  el usuario si se refiere al rumbo inicial del robot (hoy `comprobar_pose --escribir` a mano) o a la orientación de
+  las estaciones.
+- Pendientes de confirmar por el usuario: (1) localización en el pasillo con paredes medidas (`ajuste_mapa` ampliado;
+  el lunes medir con cinta la parte ancha Y 13.00 entre X 1.32-5.18 y el extremo X −0.55); (2) mapa entregable con
+  slam_toolbox y el scan resellado −0.1 s (nodo reenviador); (3) fase III hecha antes del lunes con
+  `bag_fase1_20261106_171005`; (4) acortar la fase II al confirmar la estación cuadrada; (5) θ en P Base mirando a la
+  estación.
+- Plan del lunes: 0:00 preparar PC/robot · 0:20 medir pasillo · 0:40 ensayo misión completa (bag + SLAM) · 1:30 fase III
+  · 2:15 vídeo definitivo · 3:15 guardar todo. Prioridad: vídeo de fases I+II antes que la fase III.
+- Preguntas al profesor (el lunes al llegar): slam_toolbox, pose final de la fase I y su θ, si se mueven estaciones y
+  paneles, tolerancia del aparcado.
+
 ## Lo que queda, por orden
 
 1. **Detector de pilares (fase II): HECHO** (rama `fase2-pilares`, sin probar en el robot, pero sí con el nodo real
