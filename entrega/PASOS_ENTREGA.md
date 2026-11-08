@@ -39,7 +39,8 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
 ## Después del laboratorio
 
 9. [ ] Elegir la ejecución buena (la del vídeo) y copiar a `entrega/`:
-       - `mission_log.csv` (el `mission_log_<fecha>.csv` de esa ejecución, renombrado);
+       - `mission_log.csv`: `python3 entrega/log_entrega.py <mission_log_FECHA.csv>` (deja solo los obstáculos del
+         pasillo, como pide el enunciado, y todo lo demás). O el log tal cual, renombrado;
        - `mapa/mapa_fases_I_II.pgm` y `mapa/mapa_fases_I_II.yaml`;
        - `video.mp4` (recortado si hace falta). Si pesa demasiado (el aviso lo permite), subirlo a Drive o YouTube
          (sin listar) y poner el enlace en la memoria y en un `video_enlace.txt` dentro del zip.
@@ -51,7 +52,8 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
        - comprobar que tiene lo que pide el enunciado: diagrama de nodos y topics, lógica de las fases I y II, estrategia de
          evitación;
        - exportar a PDF → `entrega/memoria.pdf`.
-11. [ ] Declaración de uso de IA generativa con la plantilla `Declaracio_responsable_IA.docx` (rellenarla y exportarla
+11. [ ] Declaración de uso de IA: borrador en `entrega/Declaracio_responsable_IA_borrador.docx` (completar los
+        `[COMPLETAR]`, marcar los compromisos y el historial; rellenarla y exportarla
         a PDF → `entrega/declaracion_IA.pdf`, o meter la información en la memoria, como permite el aviso).
 12. [ ] Código final en `main` (con las medidas nuevas si las hay), tests en el portátil (`docker/tests.sh`), commit y push.
 13. [ ] `entrega/crear_zip.sh` desde `main`: no debe dar AVISOS ni ERROR (compila el paquete solo con lo que va en el zip).
