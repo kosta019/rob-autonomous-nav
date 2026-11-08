@@ -1,5 +1,7 @@
 # Pasos hasta la entrega
 
+**Fecha límite: martes 10/11/2026 a las 10:00** (un zip con todo; el vídeo puede ir como enlace si pesa mucho).
+
 Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `fase2-pilares` + corrección de la fase III
 + simulación). Si la corrección diera problemas en el robot: `-p phase3_side_wait:=0.0`.
 
@@ -10,14 +12,14 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
 - [ ] Borrar `entrega/entrega_ROB/` (zip descomprimido de prueba; colcon veía el paquete dos veces).
 - [ ] Memoria: que la sesión de la memoria tenga ya los números de las dos baterías de Gazebo y deje bien marcados los
       `[PENDIENTE 09/11]`.
-- [ ] Preguntar la fecha y la hora límite de la entrega y dónde se sube (Atenea).
+- [ ] Bajar de Atenea la plantilla `Declaracio_responsable_IA.docx` y dejarla en `entrega/` (para rellenarla).
 
 ## Lunes en el laboratorio
 
 0. [ ] Preparar el PC (README_DEMO 1): `git pull`, `git checkout arreglo-fase3-lado`, `colcon build`, `ROS_DOMAIN_ID=11`.
        Comprobar que están slam_toolbox y nav2_map_server. `docker/tests.sh` no hace falta allí.
 1. [ ] Preguntas al profesor al llegar: si vale slam_toolbox, la pose final de la fase I y su θ, si moverá las
-       estaciones y los paneles, la tolerancia del aparcado y si el vídeo puede ir como enlace.
+       estaciones y los paneles y la tolerancia del aparcado.
 2. [ ] Misión completa con bag y SLAM (fases I, II y III). Comprobar en el Mission Log `POSE_INICIAL` (≈ lo que daba
        `comprobar_pose`), `CORR_PASILLO` solo en la fase II, la estación, `THETA_HACIA_ESTACION` y la fase III.
 3. [ ] Medidas con cinta:
@@ -39,7 +41,8 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
 9. [ ] Elegir la ejecución buena (la del vídeo) y copiar a `entrega/`:
        - `mission_log.csv` (el `mission_log_<fecha>.csv` de esa ejecución, renombrado);
        - `mapa/mapa_fases_I_II.pgm` y `mapa/mapa_fases_I_II.yaml`;
-       - `video.mp4` (recortado si hace falta; si pesa demasiado para Atenea, subirlo y poner el enlace en la memoria).
+       - `video.mp4` (recortado si hace falta). Si pesa demasiado (el aviso lo permite), subirlo a Drive o YouTube
+         (sin listar) y poner el enlace en la memoria y en un `video_enlace.txt` dentro del zip.
 10. [ ] Memoria:
        - rellenar los `[PENDIENTE 09/11]` con los resultados del lunes (fase III, corrección del pasillo, pose de salida,
          medidas nuevas);
@@ -48,11 +51,12 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
        - comprobar que tiene lo que pide el enunciado: diagrama de nodos y topics, lógica de las fases I y II, estrategia de
          evitación;
        - exportar a PDF → `entrega/memoria.pdf`.
-11. [ ] Declaración de uso de IA generativa → `entrega/declaracion_IA.pdf` (qué herramientas, para qué y qué ha revisado
-        el equipo; firmada si lo piden).
+11. [ ] Declaración de uso de IA generativa con la plantilla `Declaracio_responsable_IA.docx` (rellenarla y exportarla
+        a PDF → `entrega/declaracion_IA.pdf`, o meter la información en la memoria, como permite el aviso).
 12. [ ] Código final en `main` (con las medidas nuevas si las hay), tests en el portátil (`docker/tests.sh`), commit y push.
 13. [ ] `entrega/crear_zip.sh` desde `main`: no debe dar AVISOS ni ERROR (compila el paquete solo con lo que va en el zip).
 14. [ ] Revisar el zip: `unzip -l entrega/entrega_ROB.zip` (paquete, memoria, declaración, mapa, Mission Log, vídeo) y
         abrir la memoria y el vídeo desde dentro del zip.
-15. [ ] Renombrar el zip si el profesor pide un formato (grupo, nombres) y subirlo a Atenea antes de la hora límite.
+15. [ ] Renombrar el zip si el profesor pide un formato (grupo, nombres) y subirlo a Atenea **antes del martes a las
+        10:00** (mejor el lunes por la noche, con margen).
 16. [ ] `git tag entrega && git push --tags` para tener marcado exactamente lo entregado.

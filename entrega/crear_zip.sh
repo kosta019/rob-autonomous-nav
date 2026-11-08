@@ -4,7 +4,8 @@
 # comprobar que funciona solo con lo que va en el zip.
 # Uso (desde la raíz del repo):  entrega/crear_zip.sh
 # Entregables que hay que dejar en entrega/ antes:
-#   memoria.pdf, declaracion_IA.pdf, mission_log.csv, video.mp4 y mapa/ (el .pgm y el .yaml del SLAM)
+#   memoria.pdf, declaracion_IA.pdf, mission_log.csv, mapa/ (el .pgm y el .yaml del SLAM) y video.mp4 (o
+#   video_enlace.txt con el enlace, si el vídeo pesa demasiado)
 cd "$(dirname "$0")/.." || exit 1
 DIR=$(mktemp -d)
 P=autonomous_nav
@@ -20,9 +21,13 @@ git archive HEAD $PAQUETE | tar -x -C "$DIR" || exit 1
 
 # Entregables (no están en git)
 FALTAN=""
-for f in memoria.pdf declaracion_IA.pdf mission_log.csv video.mp4 mapa; do
+for f in memoria.pdf declaracion_IA.pdf mission_log.csv mapa; do
   if [ -e "entrega/$f" ]; then cp -r "entrega/$f" "$DIR/"; else FALTAN="$FALTAN $f"; fi
 done
+# El vídeo, o un enlace si pesa demasiado (lo permite el aviso de la entrega)
+VIDEO=""
+for f in video.mp4 video_enlace.txt; do [ -e "entrega/$f" ] && cp "entrega/$f" "$DIR/" && VIDEO=1; done
+[ -z "$VIDEO" ] && FALTAN="$FALTAN video.mp4|video_enlace.txt"
 [ -n "$FALTAN" ] && echo "AVISO: faltan en entrega/:$FALTAN"
 
 # El paquete tiene que compilar y dar sus ejecutables solo con lo que va en el zip
