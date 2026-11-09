@@ -31,7 +31,11 @@ Qué cambia respecto al índice de abajo:
   lado cuando el primero está tapado.
 - **Mapa SLAM:** `test_real/datos_20261109/mapa_sin_paradas.*` (233 × 354 celdas, 5 cm), guardado al acabar la fase II. Coherente,
   pero girado respecto a los ejes del enunciado. **No se ha podido confirmar que se vean las 4 patas:** míralo antes de afirmarlo. No
-  hay figura hecha: genérala desde el `.pgm`.
+  hay figura hecha: genérala desde el `.pgm`. **Limitación que hay que contar en la memoria (decisión de Marc: se entrega tal cual):**
+  la sala sale recta (pared larga a +0.3°), pero el pasillo se curva al alejarse de ella: entre −2° y +6° en el tramo cercano y entre
+  +8° y +14° en la mitad lejana (medido sobre el `.pgm`, aproximado por los escalones reales de esa pared). Causa probable, sin
+  comprobar: el rumbo que se tuerce en la fase II y las pocas referencias del pasillo para un LiDAR de 3.5 m. No afecta a la
+  navegación, que no usa este mapa.
 - **Robots:** BOT 11 (`ROS_DOMAIN_ID=11`). Parte de la tarde se usó el BOT 04, y con él el rumbo se desvió 17° en la fase II.
 
 **Sigue como hueco** (`[PENDIENTE]` en amarillo): el error del aparcado de la misión de la entrega, y si el `real.yaml` entregado
