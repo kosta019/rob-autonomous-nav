@@ -12,10 +12,9 @@ del 06/11, con el porqué de cada parámetro).
   sin paradas): `mission_log_bot11_sin_paradas.csv`, `mapa_sin_paradas.*` y su bag, en esa carpeta. Lanzada con
   `-p phase2_enabled:=true -p phase3_enabled:=true -p reloc_pbase_times:=0`. El vídeo no está en el repo (lo tiene Marc). La de
   las 16:22 (429 s, aparcado verificado a 3.2 cm) queda de reserva: `mission_log_bot11_mision_final.csv`, `mapa_final.*`.
-- **Ramas:** `arreglo-fase3-lado` es la de la entrega e incluye `phase1_pass_speed` (0.06 en `real.yaml`, 0 lo apaga).
-  `fase1-sin-paradas` ya no hace falta. `main` sigue sin tocar.
-- **Pendiente de decidir (Marc):** `real.yaml` deja `reloc_pbase_times: 2`, pero el vídeo se hizo con 0: el código entregado no
-  hace lo mismo que el vídeo.
+- **Ramas:** todo está en `main` (09/11 por la noche), incluido `phase1_pass_speed` (0.06 en `real.yaml`, 0 lo apaga). La etiqueta
+  `viernes-06-11` marca el código del viernes. `memoria` sigue viva solo hasta entregar.
+- **Decidido (Marc, 09/11):** `reloc_pbase_times: 0` en `real.yaml`, igual que en el vídeo. Ya no hace falta pasarlo con `-p`.
 - **Hay que regenerar `entrega/mission_log.csv` y `entrega/mapa/`** (están en `.gitignore`):
   `python3 entrega/log_entrega.py test_real/datos_20261109/mission_log_bot11_sin_paradas.csv entrega/mission_log.csv`
   y `mkdir -p entrega/mapa && cp test_real/datos_20261109/mapa_sin_paradas.* entrega/mapa/`. Comprobar a mano que el mapa

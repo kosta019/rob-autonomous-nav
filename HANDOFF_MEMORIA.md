@@ -38,8 +38,8 @@ Qué cambia respecto al índice de abajo:
   navegación, que no usa este mapa.
 - **Robots:** BOT 11 (`ROS_DOMAIN_ID=11`). Parte de la tarde se usó el BOT 04, y con él el rumbo se desvió 17° en la fase II.
 
-**Sigue como hueco** (`[PENDIENTE]` en amarillo): el error del aparcado de la misión de la entrega, y si el `real.yaml` entregado
-deja `reloc_pbase_times` en 2 o en 0 (el vídeo usa 0; decisión de Marc pendiente).
+**Sigue como hueco** (`[PENDIENTE]` en amarillo): el error del aparcado de la misión de la entrega. **Decidido (Marc, 09/11):** el
+`real.yaml` entregado deja `reloc_pbase_times` en 0, como en el vídeo; se llega a P Base con 17-27 cm de error en X (limitación).
 
 ## Qué pide el enunciado (`docs/enunciado_v2.pdf`, apartado 5, "Deliverables")
 

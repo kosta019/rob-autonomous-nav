@@ -25,7 +25,8 @@ fase1_node:
     reloc_q_wall_x: 9.570        # m, pared de delante
     reloc_q_wall_y: 13.997       # m, pared de la derecha
     # Relocalización en P Base al acabar la fase II. X calibrada el 09/11 con el BOT 11 sobre la cruz (foto); Y, de cinta
-    reloc_pbase_times: 2
+    # 0 = apagada: con ella la fase III abandonó 2 de 2 (sin_patas); la misión de la entrega se hizo sin ella
+    reloc_pbase_times: 0
     reloc_pbase_wall_x: 5.332    # m
     reloc_pbase_wall_y: 17.15    # m
     # Pared larga del pasillo, medida con cinta (el mapa dice 16.90). Solo se corrige la Y: el rumbo del IMU es mejor

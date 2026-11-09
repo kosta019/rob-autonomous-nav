@@ -2,14 +2,13 @@
 
 **Fecha límite: martes 10/11/2026 a las 10:00** (un zip con todo; el vídeo puede ir como enlace si pesa mucho).
 
-Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `fase2-pilares` + corrección de la fase III
-+ simulación). Si la corrección diera problemas en el robot: `-p phase3_side_wait:=0.0`.
+Marcar cada paso al hacerlo. Desde el 09/11 por la noche todo está en `main`: las demás ramas ya no se usan.
 
 ## Antes del lunes (domingo)
 
-- [ ] Revisar y fusionar `fase2-pilares` en `main` (todo lo de la semana menos la corrección de la fase III).
+- [x] Fusionar el trabajo de la semana en `main` (hecho el 09/11 por la noche, con la corrección de la fase III).
 - [ ] Añadir el nombre del compañero en `autonomous_nav/LICENSE` (ahora solo "Marc Costa").
-- [ ] Borrar `entrega/entrega_ROB/` (zip descomprimido de prueba; colcon veía el paquete dos veces).
+- [x] Borrar `entrega/entrega_ROB/` (zip descomprimido de prueba; colcon veía el paquete dos veces).
 - [ ] Memoria: que la sesión de la memoria tenga ya los números de las dos baterías de Gazebo y deje bien marcados los
       `[PENDIENTE 09/11]`.
 - [ ] Bajar de Atenea la plantilla `Declaracio_responsable_IA.docx` y dejarla en `entrega/` (para rellenarla).
@@ -34,7 +33,7 @@ Marcar cada paso al hacerlo. Rama para el laboratorio: `arreglo-fase3-lado` (= `
        `FASE II COMPLETADA`: guardar el mapa con `map_saver_cli -f mapa_fases_I_II`.
 7. [ ] Guardar todo (README_DEMO 7): Mission Logs, bags comprimidos, mapa y fotos en `test_real/datos_20261109/`, con
        una `NOTAS.md` corta. Commit y push.
-8. [ ] Si la corrección de la fase III ha ido bien: fusionarla en `main`. Si no: anotarlo y entregar sin ella (`main`).
+8. [x] Corrección de la fase III: funcionó en el robot (`FASE3_OTRO_LADO`) y está en `main`.
 
 ## Después del laboratorio
 
