@@ -8,17 +8,18 @@ del 06/11, con el porqué de cada parámetro).
 ## Situación al acabar el laboratorio del 09/11 (LO PRIMERO: lo de la sección siguiente es de esta mañana)
 
 - **Entrega: martes 10/11 a las 10:00.** Detalle de todas las pruebas de hoy: `test_real/datos_20261109/NOTAS.md`.
-- **Misión de la entrega: la de las 16:22** (BOT 11, fases I + II + III desde A, 429 s, sin tocar patas, aparcado a 3.2 cm):
-  `mission_log_bot11_mision_final.csv`, `mapa_final.*` y su bag, en esa carpeta. Lanzada con
-  `-p phase2_enabled:=true -p phase3_enabled:=true -p reloc_pbase_times:=0`. El vídeo no está en el repo (lo tiene Marc).
-- **Ramas:** `arreglo-fase3-lado` es la de la entrega. `fase1-sin-paradas` añade `phase1_pass_speed` (0.06 en `real.yaml`, 0 lo
-  apaga): fase I 12 s más rápida en una misión (16:39). **Sin fusionar: decisión de Marc.** `main` sigue sin tocar.
+- **Misión de la entrega: la de las 16:39** (elegida por Marc: BOT 11, fases I + II + III desde A, 480 s, sin choques, fase I
+  sin paradas): `mission_log_bot11_sin_paradas.csv`, `mapa_sin_paradas.*` y su bag, en esa carpeta. Lanzada con
+  `-p phase2_enabled:=true -p phase3_enabled:=true -p reloc_pbase_times:=0`. El vídeo no está en el repo (lo tiene Marc). La de
+  las 16:22 (429 s, aparcado verificado a 3.2 cm) queda de reserva: `mission_log_bot11_mision_final.csv`, `mapa_final.*`.
+- **Ramas:** `arreglo-fase3-lado` es la de la entrega e incluye `phase1_pass_speed` (0.06 en `real.yaml`, 0 lo apaga).
+  `fase1-sin-paradas` ya no hace falta. `main` sigue sin tocar.
 - **Pendiente de decidir (Marc):** `real.yaml` deja `reloc_pbase_times: 2`, pero el vídeo se hizo con 0: el código entregado no
-  hace lo mismo que el vídeo. Si se fusiona `fase1-sin-paradas`, tampoco coincide la fase I.
+  hace lo mismo que el vídeo.
 - **Hay que regenerar `entrega/mission_log.csv` y `entrega/mapa/`** (están en `.gitignore`):
-  `python3 entrega/log_entrega.py test_real/datos_20261109/mission_log_bot11_mision_final.csv entrega/mission_log.csv`
-  y `mkdir -p entrega/mapa && cp test_real/datos_20261109/mapa_final.* entrega/mapa/`. Comprobar a mano que el mapa muestra
-  las patas: a 5 cm no se ha podido confirmar.
+  `python3 entrega/log_entrega.py test_real/datos_20261109/mission_log_bot11_sin_paradas.csv entrega/mission_log.csv`
+  y `mkdir -p entrega/mapa && cp test_real/datos_20261109/mapa_sin_paradas.* entrega/mapa/`. Comprobar a mano que el mapa
+  muestra las patas: a 5 cm no se ha podido confirmar.
 - **Probado hoy en el robot, y funciona:** `POSE_INICIAL`, `CORR_PASILLO` (`activo`), `scan_slam`, fase II en el nodo, detector de
   estaciones (se mueven cada día), fase III (3 de 5 intentos entra; sin choques) y `FASE3_OTRO_LADO`.
 - **Limitaciones conocidas:** el rumbo se tuerce en la fase II (3.6° a 12°, varía de una misión a otra). Sin relocalización,

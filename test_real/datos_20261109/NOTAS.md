@@ -124,3 +124,5 @@ relocalización en P Base apagada. Comparación con la misión de las 16:22:
 
 Un `PARADA_EMERGENCIA` a los 321.5 s en la fase II, con un obstáculo a unos 9 cm en (4.07, 15.29). Estación cuadrada movida a
 (3.42, 14.21). Dos `sin_patas` (con 4 objetos vistos) antes de `FASE3_CENTRO patas=3`.
+
+**Misión elegida para la entrega: la de las 16:39** (decisión de Marc: sin choques). La de las 16:22 queda de reserva.
