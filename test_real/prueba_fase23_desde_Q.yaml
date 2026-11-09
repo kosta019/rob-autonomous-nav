@@ -1,0 +1,19 @@
+# Prueba rápida de las fases II y III sin repetir la fase I (09/11): fase I trivial, el robot ya está en Q.
+# La pose de salida la fija la relocalización con la esquina de Q (reloc_q_at), como en la misión completa, así que
+# basta colocarlo a mano sobre la cruz de Q mirando a +X.
+# Uso, último --params-file, con -p phase2_enabled:=true -p phase3_enabled:=true al final:
+#   ros2 run autonomous_nav fase1_node --ros-args --params-file $CFG/fase1.yaml --params-file $CFG/real.yaml \
+#     --params-file src/rob-autonomous-nav/test_real/prueba_fase23_desde_Q.yaml \
+#     -p phase2_enabled:=true -p phase3_enabled:=true
+fase1_node:
+  ros__parameters:
+    initial_pose: [8.970, 14.497, 0.0]
+    start_pose_check: false     # en el pasillo el mapa está mal: la pose la da la esquina de Q
+    waypoint_names: ["Q"]
+    waypoints_x: [8.970]
+    waypoints_y: [14.497]
+    mandatory_waypoints: ["Q"]
+    planning_sequence: ["Q"]
+    final_pose: [8.970, 14.497, 0.0]
+    reloc_q_at: "Q"
+    map_corr_mode: "apagado"

@@ -29,10 +29,12 @@ fase1_node:
     # registra sin mover la pose (usar si con "activo" salen dy grandes y seguidos)
     corridor_corr_mode: "activo"
     # Segunda pared: lado de la sala del tramo ancho, medida con cinta desde la cruz de P Base: 2.39 m -> Y = 15.70 - 2.39
-    corridor_wall_axis: ["y", "y"]
-    corridor_wall_value: [17.15, 13.31] # m
-    corridor_wall_from: [-0.55, 1.32]   # m
-    corridor_wall_to: [9.57, 5.18]      # m
+    # Tercera pared, para corregir la X: la del fondo, solo en la franja de Y de la pasada (no es perpendicular, y fuera
+    # de ahí se aparta). Valor: cruz de P Base (3.34) + 6.20 m de cinta hasta esa pared (06/11)
+    corridor_wall_axis: ["y", "y", "x"]
+    corridor_wall_value: [17.15, 13.31, 9.54]  # m
+    corridor_wall_from: [-0.55, 1.32, 15.0]    # m (en la pared "x", desde qué Y)
+    corridor_wall_to: [9.57, 5.18, 16.1]       # m (en la pared "x", hasta qué Y)
     # Velocidad en el pasillo (fase II). 0.12 en las primeras pruebas; subida el 09/11 tras dos misiones I+II completas
     phase2_max_linear_speed: 0.20   # m/s
     # Corrige la pose de salida con el LiDAR al arrancar
