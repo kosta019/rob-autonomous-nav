@@ -111,7 +111,7 @@ def nodo_q():
     n = SimpleNamespace(
         estado='AVANZAR', i_objetivo=0, objetivos=[('Q', 8.970, 14.497, 0.02), ('final', 8.970, 14.497, 0.02)],
         reloc_q_en='Q', reloc_q_veces=2, reloc_q_hechas=0, reloc_n=10, reloc_antes_de='Door', sustitutos={},
-        pose_final=[8.970, 14.497, 0.0], tol_final_yaw=0.03, k_angular=1.5, max_w=0.4, k_lineal=0.5, max_v=0.12,
+        pose_final=[8.970, 14.497, 0.0], tol_final_yaw=0.03, k_angular=1.5, max_w=0.4, k_lineal=0.5, v_paso=0.0, max_v=0.12,
         angulo_girar=0.17, angulo_reorientar=0.52, plan_final_dist=0.30, eventos=[], fase='I')
     n.get_logger = lambda: SimpleNamespace(info=lambda *a: None, warn=lambda *a: None)
     n.escribir_log = lambda x, y, th, ev, *a: n.eventos.append(ev)
@@ -132,6 +132,46 @@ def test_en_q_relocaliza_dos_veces_y_luego_sigue():
     Fase1Node.maquina_estados(n, 8.965, 14.497, 0.0)
     assert n.i_objetivo == 1 and 'WAYPOINT Q' in n.eventos
     assert n.eventos[:2] == ['LLEGADA_RELOC_Q 1', 'LLEGADA_RELOC_Q 2']
+
+
+# ---------- Fase I sin parar en cada punto (phase1_pass_speed) ----------
+
+def nodo_paso(objetivos, v_paso=0.06):
+    n = nodo_q()
+    n.reloc_q_en, n.objetivos, n.v_paso = '', objetivos, v_paso
+    n.maquina_estados = lambda x, y, th: Fase1Node.maquina_estados(n, x, y, th)
+    return n
+
+
+def test_con_v_paso_cero_para_en_el_punto_como_antes():
+    n = nodo_paso([('B', 1.0, 0.0, 0.07), ('C', 3.0, 0.2, 0.07)], v_paso=0.0)
+    assert Fase1Node.maquina_estados(n, 1.0, 0.0, 0.0) == (0.0, 0.0)
+    assert (n.estado, n.i_objetivo) == ('GIRAR', 1)
+
+
+def test_no_para_si_el_siguiente_tramo_gira_poco():
+    n = nodo_paso([('B', 1.0, 0.0, 0.07), ('C', 3.0, 0.2, 0.07)])
+    v, _ = Fase1Node.maquina_estados(n, 1.0, 0.0, 0.0)
+    assert v > 0.0 and (n.estado, n.i_objetivo) == ('AVANZAR', 1)
+
+
+def test_gira_parado_si_el_siguiente_tramo_gira_mucho():
+    n = nodo_paso([('B', 1.0, 0.0, 0.07), ('C', 1.0, 2.0, 0.07)])
+    v, w = Fase1Node.maquina_estados(n, 1.0, 0.0, 0.0)
+    assert v == 0.0 and w > 0.0 and n.estado == 'GIRAR'
+
+
+def test_velocidad_minima_al_acercarse_a_un_punto():
+    n = nodo_paso([('E', 1.0, 0.0, 0.02), ('X', 2.0, 0.0, 0.07)])
+    v, _ = Fase1Node.maquina_estados(n, 0.92, 0.0, 0.0)     # a 8 cm: 0.5 * 0.08 = 0.04 sin velocidad mínima
+    assert v == pytest.approx(0.06)
+
+
+def test_sin_velocidad_minima_en_la_pose_final_ni_desalineado():
+    n = nodo_paso([('final', 1.0, 0.0, 0.02)])
+    assert Fase1Node.maquina_estados(n, 0.92, 0.0, 0.0)[0] == pytest.approx(0.04)
+    n = nodo_paso([('E', 1.0, 0.0, 0.02), ('X', 2.0, 0.0, 0.07)])
+    assert Fase1Node.maquina_estados(n, 0.92, 0.0, 0.3)[0] == pytest.approx(0.04)   # error de 0.3 rad (> 10°)
 
 
 # ---------- Rodeo largo: mejor esperar ----------

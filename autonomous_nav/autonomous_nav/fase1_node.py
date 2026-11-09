@@ -381,6 +381,7 @@ class Fase1Node(Node):
         self.max_v = self.declare_parameter('max_linear_speed', D).value
         self.max_w = self.declare_parameter('max_angular_speed', D).value
         self.k_lineal = self.declare_parameter('k_linear', D).value
+        self.v_paso = self.declare_parameter('phase1_pass_speed', D).value    # 0 = para en cada punto, como antes
         self.k_angular = self.declare_parameter('k_angular', D).value
         self.angulo_girar = self.declare_parameter('turn_in_place_angle', D).value
         self.angulo_reorientar = self.declare_parameter('reorient_angle', D).value
@@ -1704,6 +1705,10 @@ class Fase1Node(Node):
             if self.i_objetivo < len(self.objetivos) and self.objetivos[self.i_objetivo][0] == self.reloc_antes_de:
                 self.empezar_reloc('puerta')
                 self.get_logger().info(f'Relocalizo en {nombre}: junto {self.reloc_n} scans parado')
+            if self.v_paso > 0.0 and self.fase == 'I' and self.estado == 'GIRAR':
+                # Fase I: no para en el punto, sigue ya hacia el siguiente. Si hay que girar más de 30°, AVANZAR pasa a GIRAR
+                self.estado = 'AVANZAR'
+                return self.maquina_estados(x, y, th)
             return 0.0, 0.0
 
         # Error de ángulo hacia el objetivo
@@ -1721,7 +1726,11 @@ class Fase1Node(Node):
         if abs(error) > self.angulo_reorientar:
             self.estado = 'GIRAR'
             return 0.0, w
-        return min(self.k_lineal * dist, self.max_v), w
+        v = min(self.k_lineal * dist, self.max_v)
+        if (self.v_paso > 0.0 and self.fase == 'I' and nombre != 'final' and not es_q
+                and abs(error) < self.angulo_girar):
+            v = max(v, self.v_paso)     # bien alineado: no se arrastra al acercarse (la tolerancia no cambia)
+        return v, w
 
     # ---------- Salidas ----------
 

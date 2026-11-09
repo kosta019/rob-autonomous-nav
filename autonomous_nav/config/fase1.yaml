@@ -28,6 +28,7 @@ fase1_node:
     max_linear_speed: 0.15       # m/s (máximo del Burger: 0.22)
     max_angular_speed: 0.8       # rad/s (máximo del Burger: 2.84)
     k_linear: 0.5                # v = k_linear * distancia, limitada a max_linear_speed
+    phase1_pass_speed: 0.0       # m/s en la fase I: > 0 no para en cada punto y es la velocidad mínima al acercarse. 0: como antes
     max_linear_accel: 0.20       # m/s²: la velocidad sube como mucho esto por segundo (al frenar no hay límite).
                                  #   Sin rampa, el tirón al arrancar hace saltar el rumbo del IMU
     start_after: ""              # waypoint de salida ("" desde A, "B" desde B o C, "D" desde D): quita los anteriores

@@ -85,6 +85,7 @@ def nodo_cobertura(estaciones):
     n.i_objetivo, n.pose_final, n.anclas, n.obligatorios = 0, [3.34, 15.70, 0.0], ['P2_e'], ['P1_e']
     n.sustitutos, n.reloc_q_en, n.reloc_antes_de = {}, '', 'Door'
     n.reloc_p_hechas, n.reloc_p_veces = 0, 0
+    n.v_paso = 0.0
     n.estaciones, n.estacion_confirmar = estaciones, 5
     n.fase2b_activa, n.fase2b_nombres = True, ['S1_e', 'S1_o']
     n.fase2b_x, n.fase2b_y = [8.80, 0.10], [14.65, 14.65]

@@ -58,7 +58,7 @@ def nodo(estado='MEDIR3'):
         f3_intentos_max=3, f3_max_desvio=0.25, f3_centro=None, f3_patas=[], f3_v=0.05, f3_tol=0.01, f3_dist=0.80,
         f3_radio_pata=0.07, f3_tol_aparcado=0.03, f3_max_desalineado=math.radians(6.0), f3_espera_lado=10.0,
         f3_estacion=None, f3_lados_descartados=[], obstaculos={}, margen_plan=0.10, holgura_objetivo=0.60,
-        t_sin_camino=None, estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5,
+        t_sin_camino=None, estacion_lado=0.44, lidar_offset_x=OFF, k_angular=1.5, k_lineal=0.5, v_paso=0.0,
         max_w=0.4, angulo_girar=0.17, cono=math.radians(30), stop_distance=0.30, tol_obligatorio=0.02,
         estaciones=[{'tipo': 'cuadrada', 'x': C[0] + 0.05, 'y': C[1] - 0.04, 'ang': 0.0, 'vistas': 9}],
         estacion_confirmar=5, inflado=0.25, plan_final_dist=0.30, fase2_max_v=0.12,

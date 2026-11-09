@@ -4,6 +4,7 @@ fase1_node:
     use_sim_time: false
     # Más lento que en Gazebo: a velocidad alta el rumbo derivaba unos grados a lo largo de la ruta
     max_linear_speed: 0.20       # m/s
+    phase1_pass_speed: 0.06      # m/s: fase I sin parar en cada punto (0 lo apaga)
     max_angular_speed: 0.4       # rad/s, más suave que en fase1.yaml. Solo satura los giros de más de ~15°
     tol_mandatory: 0.02          # m. Con 0.03 el robot se paraba unos 2.7 cm antes de B
     tol_final_yaw: 0.03          # rad
