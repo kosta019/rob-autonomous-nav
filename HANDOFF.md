@@ -1,8 +1,35 @@
-# Handoff para el siguiente agente (06/11/2026, fin de la sesión de laboratorio)
+# Handoff para el siguiente agente (actualizado el 09/11/2026, antes del laboratorio)
 
 Léelo entero antes de tocar nada. Después, en este orden: `CLAUDE.md` (reglas del proyecto, datos medidos, decisiones
-cerradas), `README_DEMO.md` (cómo se opera el robot: es lo que usará el equipo en la demo, sin agente) y
-`test_real/datos_20261106/NOTAS.md` (todas las pruebas del 06/11, con el porqué de cada parámetro).
+cerradas), `README_DEMO.md` (cómo se opera el robot: es lo que usará el equipo en la demo, sin agente),
+`entrega/PASOS_ENTREGA.md` (todos los pasos hasta la entrega) y `test_real/datos_20261106/NOTAS.md` (todas las pruebas
+del 06/11, con el porqué de cada parámetro).
+
+## Situación el 09/11 (lo primero que hay que saber)
+
+- **Entrega: martes 10/11/2026 a las 10:00.** Hoy es el último día de laboratorio.
+- **Rama de trabajo: `arreglo-fase3-lado`.** `main` sigue con el código del viernes 06/11 y con un handoff de ese día: no
+  sirve para el laboratorio. En el PC: `cd ~/ros2_ws/src/rob-autonomous-nav && git fetch && git checkout
+  arreglo-fase3-lado && git pull`, y `colcon build` (README_DEMO 1).
+- **Nada del código escrito desde el 07/11 se ha probado en el robot:** `POSE_INICIAL`, `CORR_PASILLO`, `scan_slam`, la
+  fase II dentro del nodo, `THETA_HACIA_ESTACION`, la segunda cobertura y toda la fase III. Solo tests, bags (lazo
+  abierto) y Gazebo.
+- **Corrección de la fase III** (commit `2afc08d`, sin verificar en el robot): si un panel tapa el punto de delante de la
+  estación, elige otro lado (`phase3_side_wait`, 10 s; `0.0` la desactiva). Cómo montar la prueba:
+  `sim/fallos/fase3_lado_tapado/README.md`. No fusionarla en `main` hasta que Marc la verifique. Si falla,
+  `git revert 2afc08d` (comprobado: sale sin conflictos).
+- **Simulaciones en Gazebo** (`sim/`, 300 misiones por batería, con paneles, cajas y persona móvil): sin la corrección,
+  293/300 y 0 choques; con ella, **300/300, 0 choques, 0 contactos y 0 atascos**. Fallos documentados en `sim/fallos/`.
+- **Orden recomendado hoy:** preguntas al profesor → primera misión desde A **ya grabando vídeo**, con bag y SLAM,
+  guardando el mapa al salir `FASE II COMPLETADA` → subir esos datos → fase III con panel → medidas con cinta → aplicar
+  las medidas solo si sobra tiempo (y entonces misión de comprobación y vídeo nuevo). Asegurar primero una entrega válida.
+  Si falta tiempo, se recorta en este orden: mesas entre B y C (solo anotar; `planificar_fase1.py` necesita scipy, que
+  solo está en el portátil), paredes nuevas del pasillo, prueba del panel. Nunca el vídeo con bag y mapa.
+- **Entrega:** `entrega/crear_zip.sh` (desde HEAD), `entrega/log_entrega.py` (Mission Log con los obstáculos del pasillo),
+  `entrega/CONTENIDO.md`. El borrador de la declaración de IA está solo en el portátil de Marc, fuera de git a propósito.
+- **Hoy no se hace limpieza de ramas ni se avanza `main`:** queda para después del laboratorio.
+- **Reglas de hoy:** `fase1_node` lo lanza Marc en su terminal, nunca en segundo plano. No cambiar el nodo sin enseñarle
+  antes los fallos con números.
 
 ## Contexto en dos líneas
 
@@ -17,8 +44,8 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
 | Fase | Estado |
 |---|---|
 | I | **Terminada.** Vídeo grabado (A → Q, 2:49 a 0.20 m/s, `mission_log_ruta_video.csv`). Probada desde A, B (hasta E) y C (hasta Q) entre paneles de madera. D sin probar (el usuario la da por buena). |
-| II | **~30 %.** Prototipo de ruta de cobertura (`test_real/prueba_pasillo.yaml`), primer mapa SLAM, bags de las estaciones, posición real de R medida. Falta casi todo lo importante (abajo). |
-| III | **~5 %.** Solo medidas y un bag de aproximación a R. |
+| II | **Código hecho, sin probar en el robot.** Cobertura en el nodo, detector de pilares, corrección con la pared del extintor, segunda cobertura y mapa con `scan_slam`. Comprobado con bags y en Gazebo. |
+| III | **Código hecho, sin probar en el robot.** `MEDIR3`, `ENTRAR`, `VERIFICAR3`. Con el bag de las 17:10, centro a 0.6-1.2 cm de la cinta; en Gazebo aparca. |
 
 ## Cómo está hecho (lo esencial)
 
@@ -34,7 +61,7 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
   `prueba_estaciones.yaml`, `prueba_aproximacion_R.yaml` (último `--params-file`; ver README_DEMO).
 - `comprobar_pose`: pose inicial con el LiDAR contra las paredes del mapa. En A va bien; en B y C solo ve paredes del
   eje Y (los paneles tapan el fondo) y hay que escribir la pose a mano (README_DEMO, 3.2).
-- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **148 passed, 1 xfailed** (07/11; o `docker/tests.sh`).
+- Tests: `cd autonomous_nav && python3 -m pytest -q test` con `install/setup.bash` cargado → **150 passed, 1 xfailed** en `arreglo-fase3-lado` (o `docker/tests.sh`).
 
 ## Datos clave medidos el 06/11 (detalle en CLAUDE.md)
 
@@ -107,12 +134,14 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
     `PILAR_DESCARTADA` (cambiado el 07/11).
   - Fase III frente a *"conservative clearance buffer"*: entrar a ~10 cm de las patas es la propia maniobra que pide el
     enunciado; justificarlo en el informe (velocidad baja, pose relativa a las patas, parada si algo inesperado).
-- Plan del lunes: 0:00 preparar PC/robot · 0:20 medir pasillo · 0:40 ensayo misión completa (bag + SLAM) · 1:30 fase III
-  · 2:15 vídeo definitivo · 3:15 guardar todo. Prioridad: vídeo de fases I+II antes que la fase III.
+- Plan del lunes: el orden está en "Situación el 09/11", al principio de este fichero. Prioridad: vídeo de fases I+II
+  antes que la fase III.
 - Preguntas al profesor (el lunes al llegar): slam_toolbox, pose final de la fase I y su θ, si se mueven estaciones y
   paneles, tolerancia del aparcado.
 
-## Lo que queda, por orden
+## Historial de tareas (hasta el 07/11)
+
+Lo que queda de verdad está en `entrega/PASOS_ENTREGA.md`. Esta lista se conserva por el detalle técnico de cada parte.
 
 1. **Detector de pilares (fase II): HECHO** (rama `fase2-pilares`, sin probar en el robot, pero sí con el nodo real
    reproduciendo los bags). `autonomous_nav/pilares.py` (solo numpy) + `Fase1Node.detectar_pilares` → filas
@@ -141,11 +170,9 @@ sala y el pasillo (zona 2) **fuera**: desde el PC no se ve el robot en las fases
    `final_plan_dist` (0.30 m) de Q, al pasar Q se planifica hasta ella (`PLAN_FINAL` / `FINAL_SIN_CAMINO`); antes iba en
    línea recta (al vestíbulo, p. ej. (7.5, 12.6), cruzaba una pared). En README_DEMO ("Pose final"). **Sin probar en el
    robot.** Sin corrección después de Q: el error crece con la distancia (lo arregla la localización por SLAM).
-6. **Fase III**: de P Base a delante de la estación, alinearse con las patas en directo, entrar entre las dos de delante
-   y parar sobre la cruz (con la pose relativa a los pilares, no la odometría). Desarrollar con
-   `bag_fase1_20261106_171005`.
-7. **Entregables**: vídeo de la misión completa, informe (diagrama de nodos y topics, lógica de las fases I y II,
-   estrategia de evitación), declaración de uso de IA. Mucho material ya está en las NOTAS de cada día.
+6. **Fase III: HECHO en código** (07/11, sin probar en el robot): ver el punto 4 de las decisiones confirmadas.
+7. **Entregables**: ver `entrega/PASOS_ENTREGA.md`. El informe se redacta en Google Docs desde otra sesión
+   (`HANDOFF_MEMORIA.md`).
 
 Pendiente de entender (no bloquea): 6-9° de rumbo acumulados entre la puerta y Q (la RELOC_Q lo corrige).
 
