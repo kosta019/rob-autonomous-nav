@@ -49,3 +49,30 @@ el chasis queda visiblemente torcido. Falta la prueba de apoyarlo contra una par
 - Rumbo: 3.9° de diferencia con las paredes al final (17° con el BOT 04).
 - Error de X parado en `P2_e`: +0.06 a +0.08 m, con una pared x = 9.54 (P Base 3.34 + 6.20 de cinta). Esa pared no estaba
   activa en esta misión.
+
+## Fases II + III desde Q con el BOT 11 (15:33), con otro robot moviéndose por el pasillo
+
+`test_real/prueba_fase23_desde_Q.yaml`, pared x = 9.54 activa. Ficheros: `mission_log_bot11_fases23_desde_Q.csv`,
+`bag_bot11_fases23_20261109_153247.tar.zst`. Batería de 11.25 a 11.19 V.
+
+- II + III en 282 s. El robot acabó centrado en la estación (visto por Marc). Log: `FASE III COMPLETADA sin_verificar
+  patas=3`. La estación se recoge cada día y se coloca en otro sitio.
+- Centro de la estación: (1.88, 14.33) en la fase II y (2.16, 13.94) medido de cerca: 48 cm. No saltó el límite de 0.25 m
+  (sin averiguar por qué).
+- P Base, medido con las paredes (X 5.18 y 1.32 del mapa; Y 17.15 y 13.31): X +17 a +19 cm (15:17: +27, que coincide con
+  los ~26 vistos), **Y +39 a +46 cm**, rumbo −8.3° (15:17: −3.6°). Giro total parecido en las dos (1236° y 1129°).
+- `CORR_PASILLO` deja de actuar hacia los 190 s: con el rumbo torcido los puntos caen fuera de la ventana.
+
+## Corrección de rumbo con las paredes (`rumbo_paredes`): NO validada, apagada
+
+Rehaciendo la pose de la fase II con los /odom y /scan grabados (error final respecto a la pose real):
+
+| Misión | Variante | Rumbo | X | Y |
+|---|---|---|---|---|
+| 15:17 | paredes X e Y, sin rumbo | +3.6° | −15 cm | −4 cm |
+| 15:17 | paredes X e Y, con rumbo | −0.9° | −15 cm | **−45 cm** |
+| 15:33 | paredes X e Y, sin rumbo | +7.1° | −18 cm | −46 cm |
+| 15:33 | paredes X e Y, con rumbo | −1.9° | −13 cm | −34 cm |
+
+Con rumbo, `ajuste_paredes` casi no recibe puntos (ny ≈ 0). Sin resolver: en la primera pasada de las 15:17 el rumbo
+corregido hace bajar la Y, mientras que la pared 13.31 indicaba que la Y real era mayor que la creída.
