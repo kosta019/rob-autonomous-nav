@@ -25,9 +25,9 @@ fase1_node:
     reloc_q_wall_y: 13.997       # m, pared de la derecha
     # Pared larga del pasillo, medida con cinta (el mapa dice 16.90). Solo se corrige la Y: el rumbo del IMU es mejor
     # y la pared del fondo no es perpendicular a ella
-    # 09/11: "sombra" (solo registra CORR_PASILLO_SOMBRA, no mueve la pose) hasta ver con un bag por qué no actuó en la
-    # misión de las 14:31 (0 eventos). Si se entiende y cuenta puntos, volver a "activo".
-    corridor_corr_mode: "sombra"
+    # 09/11: con el BOT 04 no actuó porque su rumbo derivaba y los puntos caían fuera de la ventana. "sombra" solo la
+    # registra sin mover la pose (usar si con "activo" salen dy grandes y seguidos)
+    corridor_corr_mode: "activo"
     # Segunda pared: lado de la sala del tramo ancho, medida con cinta desde la cruz de P Base: 2.39 m -> Y = 15.70 - 2.39
     corridor_wall_axis: ["y", "y"]
     corridor_wall_value: [17.15, 13.31] # m

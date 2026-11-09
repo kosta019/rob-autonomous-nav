@@ -36,3 +36,16 @@ Giro que alinea el scan con las paredes del pasillo, acumulado desde Q: +4.7° a
 
 Posible LiDAR del BOT 04 girado 5-7° respecto al chasis: colocado a ojo da siempre el mismo signo (+4.5° a +6.75°) y en Q
 el chasis queda visiblemente torcido. Falta la prueba de apoyarlo contra una pared; se recuperó el BOT 11 antes de hacerla.
+
+## Misión I + II con el BOT 11 (15:17): la de la entrega de seguridad
+
+`ROS_DOMAIN_ID=11`, fase II a 0.20 m/s, `CORR_PASILLO` activo con las paredes Y 17.15 y 13.31. Ficheros:
+`mission_log_bot11_entrega.csv`, `bag_bot11_20261109_151634.tar.zst`, `mapa_bot11.*`. Batería a 11.36 V al salir.
+
+- `FASE II COMPLETADA` a los 370 s. `POSE_INICIAL` aceptada (−0.18°). Puerta y Q sin rechazos.
+- Estaciones: cuadrada en (1.88, 14.58), triangular en (5.41, 16.29). `CORR_PASILLO`: 113 eventos.
+- Llegada a P Base: **en X, unos 26 cm de la cruz (aproximado)**; en Y, bien (LiDAR: 15.71 con el extintor, 15.79 con la sala).
+  Signo de la X sin anotar.
+- Rumbo: 3.9° de diferencia con las paredes al final (17° con el BOT 04).
+- Error de X parado en `P2_e`: +0.06 a +0.08 m, con una pared x = 9.54 (P Base 3.34 + 6.20 de cinta). Esa pared no estaba
+  activa en esta misión.
