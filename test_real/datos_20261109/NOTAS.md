@@ -108,3 +108,19 @@ en 2), porque sin ella la fase III ya había entrado (15:33) y con ella había a
 - `FASE I COMPLETADA` a 171 s, `FASE II COMPLETADA` a 366 s, `FASE III COMPLETADA patas=3` a 429 s, sin tocar patas (Marc).
 - Aparcado a 3.2 cm del centro medido, por eso `APARCADO_FUERA_DE_TOLERANCIA` (umbral propio de 3 cm).
 - Estaciones: cuadrada en (2.03, 14.62), triangular en (5.38, 16.30). P Base: error en X sin medir en esta misión.
+
+## Fase I sin parar en cada punto (16:39, rama `fase1-sin-paradas`, BOT 11, fases I + II + III desde A)
+
+`mission_log_bot11_sin_paradas.csv`, `bag_bot11_sin_paradas_20261109_163943.tar.zst`, `mapa_sin_paradas.*`. `phase1_pass_speed` 0.06,
+relocalización en P Base apagada. Comparación con la misión de las 16:22:
+
+| | 16:22 | 16:39 |
+|---|---|---|
+| E | 64.7 s | 59.5 s |
+| Door | 119.4 s | 109.2 s |
+| Fase I completada | 171.3 s | 159.0 s |
+| Fase II completada | 366.4 s | 432.5 s (5 `BLOQUEO`, otros robots/personas) |
+| Fase III completada | 428.6 s | 480.2 s, `sin_verificar patas=2` |
+
+Un `PARADA_EMERGENCIA` a los 321.5 s en la fase II, con un obstáculo a unos 9 cm en (4.07, 15.29). Estación cuadrada movida a
+(3.42, 14.21). Dos `sin_patas` (con 4 objetos vistos) antes de `FASE3_CENTRO patas=3`.

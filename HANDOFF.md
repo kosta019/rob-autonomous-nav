@@ -5,7 +5,31 @@ cerradas), `README_DEMO.md` (cómo se opera el robot: es lo que usará el equipo
 `entrega/PASOS_ENTREGA.md` (todos los pasos hasta la entrega) y `test_real/datos_20261106/NOTAS.md` (todas las pruebas
 del 06/11, con el porqué de cada parámetro).
 
-## Situación el 09/11 (lo primero que hay que saber)
+## Situación al acabar el laboratorio del 09/11 (LO PRIMERO: lo de la sección siguiente es de esta mañana)
+
+- **Entrega: martes 10/11 a las 10:00.** Detalle de todas las pruebas de hoy: `test_real/datos_20261109/NOTAS.md`.
+- **Misión de la entrega: la de las 16:22** (BOT 11, fases I + II + III desde A, 429 s, sin tocar patas, aparcado a 3.2 cm):
+  `mission_log_bot11_mision_final.csv`, `mapa_final.*` y su bag, en esa carpeta. Lanzada con
+  `-p phase2_enabled:=true -p phase3_enabled:=true -p reloc_pbase_times:=0`. El vídeo no está en el repo (lo tiene Marc).
+- **Ramas:** `arreglo-fase3-lado` es la de la entrega. `fase1-sin-paradas` añade `phase1_pass_speed` (0.06 en `real.yaml`, 0 lo
+  apaga): fase I 12 s más rápida en una misión (16:39). **Sin fusionar: decisión de Marc.** `main` sigue sin tocar.
+- **Pendiente de decidir (Marc):** `real.yaml` deja `reloc_pbase_times: 2`, pero el vídeo se hizo con 0: el código entregado no
+  hace lo mismo que el vídeo. Si se fusiona `fase1-sin-paradas`, tampoco coincide la fase I.
+- **Hay que regenerar `entrega/mission_log.csv` y `entrega/mapa/`** (están en `.gitignore`):
+  `python3 entrega/log_entrega.py test_real/datos_20261109/mission_log_bot11_mision_final.csv entrega/mission_log.csv`
+  y `mkdir -p entrega/mapa && cp test_real/datos_20261109/mapa_final.* entrega/mapa/`. Comprobar a mano que el mapa muestra
+  las patas: a 5 cm no se ha podido confirmar.
+- **Probado hoy en el robot, y funciona:** `POSE_INICIAL`, `CORR_PASILLO` (`activo`), `scan_slam`, fase II en el nodo, detector de
+  estaciones (se mueven cada día), fase III (3 de 5 intentos entra; sin choques) y `FASE3_OTRO_LADO`.
+- **Limitaciones conocidas:** el rumbo se tuerce en la fase II (3.6° a 12°, varía de una misión a otra). Sin relocalización,
+  P Base queda con 17-27 cm de error en X (con ella, bien; pero con ella la fase III abandonó 2 de 2: `sin_patas`, causa sin
+  averiguar). La corrección de rumbo con paredes no pasó la validación: `rumbo_paredes_no_validado.patch`, fuera del código.
+- **BOT 04** (`ROS_DOMAIN_ID=4`), usado esta tarde al no estar el 11: su rumbo se desvía 17° en la fase II y su LiDAR podría
+  estar girado 5-7° (sin confirmar). `real.yaml` está calibrado para el BOT 11 (`ROS_DOMAIN_ID=11`).
+- **En este PC** `~/ros2_ws/src/rob-autonomous-nav` es un enlace a `~/Baixades/rob-autonomous-nav`, sin `--symlink-install` (tras
+  cambiar código, `colcon build`). Sin paquetes de TurtleBot3 (no se puede lanzar Gazebo). `.bashrc` trae `ROS_DOMAIN_ID=04`.
+
+## Situación el 09/11 por la mañana, antes del laboratorio
 
 - **Entrega: martes 10/11/2026 a las 10:00.** Hoy es el último día de laboratorio.
 - **Rama de trabajo: `arreglo-fase3-lado`.** `main` sigue con el código del viernes 06/11 y con un handoff de ese día: no
