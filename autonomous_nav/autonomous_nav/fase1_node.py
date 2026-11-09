@@ -1,6 +1,6 @@
 # Nodo de la misión: sigue la lista de waypoints con parada de emergencia y Mission Log, detecta obstáculos y
 # pilares con el LiDAR y replanifica alrededor de ellos (fases I, II y III).
-# Sigue la estructura de la plantilla go_stop.py: una clase Node, publicadores y suscriptores en __init__,
+# Sigue la estructura: una clase Node, publicadores y suscriptores en __init__,
 # callbacks y main(). El control va en un timer a ritmo fijo, para detectar si un sensor deja de llegar.
 import csv
 import math
@@ -678,7 +678,7 @@ class Fase1Node(Node):
         # Bucle de control a ritmo fijo
         self.create_timer(1.0 / control_rate, self.control_loop)
 
-    # ---------- Callbacks ----------
+    # Callbacks
     # /scan solo guarda el último mensaje. /odom y /imu además se integran aquí, porque integrar no admite saltarse
     # mensajes.
 
@@ -721,7 +721,7 @@ class Fase1Node(Node):
         self.scan = msg
         self.t_scan = self.get_clock().now()
 
-    # ---------- Pose ----------
+    #  Pose
 
     def pose_mundo(self):
         # Pose (x, y, theta) del robot en el sistema del enunciado, o None si aún no hay /odom.
@@ -734,7 +734,7 @@ class Fase1Node(Node):
         y = yi + math.sin(thi) * self.x_rel + math.cos(thi) * self.y_rel
         return x, y, normalizar(thi + self.th_rel)
 
-    # ---------- Seguridad ----------
+    #  Seguridad
 
     def sensor_caducado(self, t):
         # Devuelve True si el sensor no ha llegado nunca o lleva más de scan_timeout sin llegar
@@ -773,7 +773,7 @@ class Fase1Node(Node):
         px, py = lx + r * math.cos(th + a), ly + r * math.sin(th + a)
         return any(math.hypot(px - qx, py - qy) < self.f3_radio_pata for qx, qy in self.f3_patas)
 
-    # ---------- Obstáculos nuevos y replanificación ----------
+    #  Obstáculos nuevos y replanificación
 
     def actualizar_obstaculos(self, x, y, th, ahora):
         # Memoria de obstáculos nuevos (lo que el LiDAR ve y el mapa no explica). Se añade cada lectura válida que cae
@@ -1301,7 +1301,7 @@ class Fase1Node(Node):
             return inflado, time.perf_counter() - t0
         return None, time.perf_counter() - t0
 
-    # ---------- Corrección continua con el mapa ----------
+    #  Corrección continua con el mapa
 
     def corregir_con_mapa(self, x, y, th):
         # Cada map_corr_every_scans scans nuevos, si el robot casi no gira y aún no está en el tramo de la puerta (allí
@@ -1371,7 +1371,7 @@ class Fase1Node(Node):
         self.escribir_log(x2, y2, th, f'CORR_PASILLO {texto}', math.hypot(dx, dy))
         return x2, y2, th
 
-    # ---------- Relocalización con las paredes ----------
+    #  Relocalización con las paredes
 
     def reloc_adelantable(self, x, y):
         # Dice si un bloqueo, yendo al último waypoint antes de reloc_before (Door) y a menos de reloc_on_block_dist
@@ -1522,7 +1522,7 @@ class Fase1Node(Node):
         yi = y - (math.sin(thi) * self.x_rel + math.cos(thi) * self.y_rel)
         self.pose_inicial = [xi, yi, thi]
 
-    # ---------- Control ----------
+    #  Control
 
     def control_loop(self):
         # Sin datos frescos de algún sensor: parada total
@@ -1732,7 +1732,7 @@ class Fase1Node(Node):
             v = max(v, self.v_paso)     # bien alineado: no se arrastra al acercarse (la tolerancia no cambia)
         return v, w
 
-    # ---------- Salidas ----------
+    #  Salidas
 
     def publicar_vel(self, v, w):
         msg = TwistStamped()
