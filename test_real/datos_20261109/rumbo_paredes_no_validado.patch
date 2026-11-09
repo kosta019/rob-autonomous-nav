@@ -1,0 +1,186 @@
+--- autonomous_nav/autonomous_nav/fase1_node.py	2026-11-09 16:10:57.010131771 +0100
++++ /tmp/claude-1000/-home-rob-Baixades-rob-autonomous-nav/08f18b54-6d65-4d2a-b959-12cce1cf84f4/scratchpad/con_rumbo/autonomous_nav/autonomous_nav/fase1_node.py	2026-11-09 16:10:56.990131378 +0100
+@@ -246,6 +246,28 @@
+     return d['x'], d['y'], n['x'], n['y']
+ 
+ 
++def rumbo_paredes(r, a, th, busqueda, paso, ancho, min_puntos):
++    # Error del rumbo con las paredes largas del pasillo, que son paralelas al eje X. r y a son las distancias y los
++    # ángulos del LiDAR (ya filtrados) y th el rumbo creído. Para cada giro g candidato se calcula la Y de cada punto
++    # respecto al robot, y = r * sin(th + g + a), y se cuentan los puntos por franjas de 'ancho'. Con el giro correcto,
++    # cada pared cae en muy pocas franjas: es el giro con mayor suma de cuadrados.
++    # Devuelve (g, n): g es lo que hay que sumar al rumbo y n los puntos en franjas con pared (4 o más). Si hay pocos, o
++    # si el mejor giro está en el borde de la búsqueda (no es un máximo de verdad), g = 0.
++    if len(r) == 0:
++        return 0.0, 0
++    franjas = np.arange(-4.0, 4.0 + ancho, ancho)
++    mejor, puntuacion, mejor_h = 0.0, -1.0, None
++    for g in np.arange(-busqueda, busqueda + paso / 2, paso):
++        h, _ = np.histogram(r * np.sin(th + g + a), bins=franjas)
++        s = float(np.sum(h.astype(float) ** 2))
++        if s > puntuacion:
++            mejor, puntuacion, mejor_h = float(g), s, h
++    n = int(np.sum(mejor_h[mejor_h >= 4]))
++    if n < min_puntos or abs(mejor) >= busqueda - paso / 2:
++        return 0.0, n
++    return mejor, n
++
++
+ def revisar_pose_inicial(pose, estimada, resumen, eje_rumbo, min_puntos, max_rms, max_corr, max_ang):
+     # Compara la pose de salida dada (initial_pose) con la estimada con las paredes del mapa (comprobar_pose.estimar)
+     # y decide qué se aplica. El rumbo solo se corrige si se han visto paredes del eje_rumbo ('' = cualquiera), y cada
+@@ -455,6 +477,12 @@
+         self.pasillo_modo = self.declare_parameter('corridor_corr_mode', Parameter.Type.STRING).value
+         self.pasillo_zona = self.declare_parameter('corridor_corr_zone', DA).value   # [x_min, x_max, y_min, y_max]
+         self.pasillo_alcance = self.declare_parameter('corridor_corr_max_range', D).value
++        self.pasillo_rumbo = self.declare_parameter('corridor_heading_corr', Parameter.Type.BOOL).value
++        self.pasillo_rumbo_busqueda = math.radians(self.declare_parameter('corridor_heading_search_deg', D).value)
++        self.pasillo_rumbo_paso = math.radians(self.declare_parameter('corridor_heading_step_deg', D).value)
++        self.pasillo_rumbo_ancho = self.declare_parameter('corridor_heading_bin', D).value
++        self.pasillo_rumbo_alcance = self.declare_parameter('corridor_heading_max_range', D).value
++        self.pasillo_rumbo_min = self.declare_parameter('corridor_heading_min_points', Parameter.Type.INTEGER).value
+         ejes = self.declare_parameter('corridor_wall_axis', SA).value
+         valores = self.declare_parameter('corridor_wall_value', DA).value
+         desde = self.declare_parameter('corridor_wall_from', DA).value
+@@ -1350,25 +1378,33 @@
+         msg = self.scan
+         r = np.array(msg.ranges, dtype=float)
+         a = msg.angle_min + np.arange(len(r)) * msg.angle_increment
+-        ok = (np.isfinite(r) & (r >= max(msg.range_min, self.alcance_min_obstaculos))
+-              & (r <= min(msg.range_max, self.pasillo_alcance)))
++        # Primero el rumbo: con él torcido, los puntos de pared caen fuera de la ventana y la X y la Y no se corrigen
++        minimo = max(msg.range_min, self.alcance_min_obstaculos)
++        dth, nth = 0.0, 0
++        if self.pasillo_rumbo:
++            bien = np.isfinite(r) & (r >= minimo) & (r <= min(msg.range_max, self.pasillo_rumbo_alcance))
++            dth, nth = rumbo_paredes(r[bien], a[bien] + self.lidar_yaw_offset, th, self.pasillo_rumbo_busqueda,
++                                     self.pasillo_rumbo_paso, self.pasillo_rumbo_ancho, self.pasillo_rumbo_min)
++        th2 = normalizar(th + limitar(dth, self.corr_max_th))
++        th_puntos = th2 if self.pasillo_modo == 'activo' else th
++        ok = np.isfinite(r) & (r >= minimo) & (r <= min(msg.range_max, self.pasillo_alcance))
+         ok[1::2] = False                # con uno de cada dos rayos basta
+-        lx = x + self.lidar_offset_x * math.cos(th)
+-        ly = y + self.lidar_offset_x * math.sin(th)
+-        px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
+-        py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
++        lx = x + self.lidar_offset_x * math.cos(th_puntos)
++        ly = y + self.lidar_offset_x * math.sin(th_puntos)
++        px = lx + r[ok] * np.cos(th_puntos + self.lidar_yaw_offset + a[ok])
++        py = ly + r[ok] * np.sin(th_puntos + self.lidar_yaw_offset + a[ok])
+         dx, dy, nx, ny = ajuste_paredes(px, py, self.pasillo_paredes, self.corr_ventana, self.corr_sig_medida,
+                                         self.corr_sig_xy, self.corr_min_puntos)
+-        if nx < self.corr_min_puntos and ny < self.corr_min_puntos:
++        if nx < self.corr_min_puntos and ny < self.corr_min_puntos and dth == 0.0:
+             return x, y, th
+-        texto = f'dx={dx:+.3f} dy={dy:+.3f} nx={nx} ny={ny}'
++        texto = f'dx={dx:+.3f} dy={dy:+.3f} nx={nx} ny={ny} dth={math.degrees(dth):+.1f} nth={nth}'
+         if self.pasillo_modo != 'activo':
+             self.escribir_log(x, y, th, f'CORR_PASILLO_SOMBRA {texto}', math.hypot(dx, dy))
+             return x, y, th
+         x2, y2 = x + limitar(dx, self.corr_max_xy), y + limitar(dy, self.corr_max_xy)
+-        self.fijar_pose(x2, y2, th)
+-        self.escribir_log(x2, y2, th, f'CORR_PASILLO {texto}', math.hypot(dx, dy))
+-        return x2, y2, th
++        self.fijar_pose(x2, y2, th2)
++        self.escribir_log(x2, y2, th2, f'CORR_PASILLO {texto}', math.hypot(dx, dy))
++        return x2, y2, th2
+ 
+     # ---------- Relocalización con las paredes ----------
+ 
+--- autonomous_nav/config/fase1.yaml	2026-11-09 16:10:57.010131771 +0100
++++ /tmp/claude-1000/-home-rob-Baixades-rob-autonomous-nav/08f18b54-6d65-4d2a-b959-12cce1cf84f4/scratchpad/con_rumbo/autonomous_nav/config/fase1.yaml	2026-11-09 16:10:56.990131378 +0100
+@@ -189,8 +189,8 @@
+     reloc_pbase_span: 2.8        # m: el tramo de X queda a unos 2.5 m de lado
+     reloc_pbase_max_rms: 0.04    # m
+     reloc_pbase_min_points: 6    # puntos mínimos por pared (del tramo de X salen unos 8)
+-    reloc_pbase_max_corr: 0.80   # m: con más, no se corrige
+-    reloc_pbase_max_angle_deg: 15.0
++    reloc_pbase_max_corr: 0.60   # m: con más, no se corrige
++    reloc_pbase_max_angle_deg: 12.0
+     reloc_pbase_max_angle_diff_deg: 10.0  # el tramo de X se desvía unos 7.4° de la perpendicular (medido): el rumbo sale del extintor
+     reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dosparedes
+ 
+@@ -214,6 +214,13 @@
+     corridor_corr_zone: [-0.55, 9.57, 13.90, 17.15]   # [x_min, x_max, y_min, y_max]: con el robot dentro se usa esta
+                                            #   corrección y no la del mapa
+     corridor_corr_max_range: 2.0           # m: más lejos, el LiDAR da las paredes con unos ±5 cm
++    # Rumbo con las paredes largas del pasillo (rumbo_paredes). Aplica como mucho map_corr_max_angle_deg por paso
++    corridor_heading_corr: false           # el robot real lo enciende en real.yaml
++    corridor_heading_search_deg: 12.0      # grados: giro máximo que se busca a cada lado
++    corridor_heading_step_deg: 0.5         # grados: paso de la búsqueda
++    corridor_heading_bin: 0.03             # m: ancho de las franjas de Y
++    corridor_heading_max_range: 3.2        # m: aquí valen puntos más lejanos: solo importa que estén alineados
++    corridor_heading_min_points: 30        # puntos en franjas con pared; con menos, no corrige el rumbo
+     # Paredes: recta "y" = valor (corrige la Y) para x entre from y to, o "x" = valor (corrige la X) para y entre
+     # from y to.
+     # Aquí las del mapa (Gazebo); en el robot real, las medidas con cinta (real.yaml)
+--- autonomous_nav/test/test_corr_pasillo.py	2026-11-09 16:10:57.014131849 +0100
++++ /tmp/claude-1000/-home-rob-Baixades-rob-autonomous-nav/08f18b54-6d65-4d2a-b959-12cce1cf84f4/scratchpad/con_rumbo/autonomous_nav/test/test_corr_pasillo.py	2026-11-09 16:10:56.990131378 +0100
+@@ -12,7 +12,7 @@
+ pytest.importorskip('rclpy')
+ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ sys.path.insert(0, RAIZ)
+-from autonomous_nav.fase1_node import Fase1Node, ajuste_paredes  # noqa: E402
++from autonomous_nav.fase1_node import Fase1Node, ajuste_paredes, rumbo_paredes  # noqa: E402
+ 
+ EXTINTOR = ('y', 17.15, -0.55, 9.57)
+ PAR = dict(ventana=0.15, sig_medida=0.03, sig_xy=0.03, min_puntos=20)
+@@ -78,7 +78,9 @@
+         corr_modo=modo_mapa, corr_y_max=10.2, pasillo_modo='activo', pasillo_zona=[-0.55, 9.57, 13.90, 17.15],
+         pasillo_alcance=2.0, pasillo_paredes=[EXTINTOR], alcance_min_obstaculos=0.20, lidar_offset_x=-0.032,
+         lidar_yaw_offset=0.0, corr_ventana=0.15, corr_sig_medida=0.03, corr_sig_xy=0.03, corr_min_puntos=20,
+-        corr_max_xy=0.03, escribir_log=lambda x, y, th, ev, *a: log.append(ev), fijar_pose=lambda *p: log.append(p))
++        corr_max_xy=0.03, corr_max_th=math.radians(1.0), pasillo_rumbo=False, pasillo_rumbo_busqueda=math.radians(12.0),
++        pasillo_rumbo_paso=math.radians(0.5), pasillo_rumbo_ancho=0.03, pasillo_rumbo_alcance=3.2, pasillo_rumbo_min=30,
++        escribir_log=lambda x, y, th, ev, *a: log.append(ev), fijar_pose=lambda *p: log.append(p))
+     n.corregir_con_paredes = lambda x, y, th: Fase1Node.corregir_con_paredes(n, x, y, th)
+     assert lx < 9.57
+     return n, log
+@@ -105,3 +107,47 @@
+     n.pasillo_modo = 'sombra'
+     assert Fase1Node.corregir_con_mapa(n, 3.34, 15.50, 0.0) == (3.34, 15.50, 0.0)
+     assert len(log) == 1 and log[0].startswith('CORR_PASILLO_SOMBRA')
++
++
++def scan_rumbo(g_real_grados, n_rayos=360):
++    # Scan de un pasillo con dos paredes paralelas a X (1.65 m a un lado y 2.40 m al otro), con el robot girado
++    # g_real_grados respecto a X. Devuelve los ángulos y las distancias en el LiDAR
++    th_real = math.radians(g_real_grados)
++    a = np.radians(np.arange(n_rayos))
++    r = np.full(n_rayos, math.inf)
++    for i in range(n_rayos):
++        s = math.sin(a[i] + th_real)
++        if s > 0.2:
++            r[i] = 1.65 / s
++        elif s < -0.2:
++            r[i] = 2.40 / -s
++    return a, r
++
++
++def test_rumbo_paredes_encuentra_el_giro():
++    # El robot cree ir a rumbo 0 pero va a -5 grados: hay que sumarle -5
++    a, r = scan_rumbo(-5.0)
++    ok = r <= 3.2
++    g, n = rumbo_paredes(r[ok], a[ok], 0.0, math.radians(12.0), math.radians(0.5), 0.03, 30)
++    assert math.degrees(g) == pytest.approx(-5.0, abs=0.5)
++    assert n >= 30
++
++
++def test_rumbo_paredes_sin_paredes_no_corrige():
++    # 40 puntos sueltos, sin ninguna pared: g = 0
++    rng = np.random.default_rng(1)
++    r, a = rng.uniform(0.5, 3.0, 40), rng.uniform(-math.pi, math.pi, 40)
++    g, _ = rumbo_paredes(r, a, 0.0, math.radians(12.0), math.radians(0.5), 0.03, 30)
++    assert g == 0.0
++
++
++def test_rumbo_se_aplica_limitado_por_paso():
++    # Con el robot torcido 5 grados, el rumbo se corrige 1 grado por paso (map_corr_max_angle_deg), y se fija la pose
++    n, log = nodo_falso(3.34, 15.50)
++    a, r = scan_rumbo(-5.0)
++    n.scan = SimpleNamespace(ranges=list(r), angle_min=0.0, angle_increment=math.radians(1.0), range_min=0.12,
++                             range_max=3.5)
++    n.pasillo_rumbo = True
++    _, _, th = Fase1Node.corregir_con_paredes(n, 3.34, 15.50, 0.0)
++    assert th == pytest.approx(-math.radians(1.0), abs=1e-9)
++    assert any(isinstance(e, str) and 'dth=-5.' in e for e in log)

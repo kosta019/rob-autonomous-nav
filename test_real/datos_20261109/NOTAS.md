@@ -76,3 +76,17 @@ Rehaciendo la pose de la fase II con los /odom y /scan grabados (error final res
 
 Con rumbo, `ajuste_paredes` casi no recibe puntos (ny ≈ 0). Sin resolver: en la primera pasada de las 15:17 el rumbo
 corregido hace bajar la Y, mientras que la pared 13.31 indicaba que la Y real era mayor que la creída.
+
+## Relocalización en P Base (16:01, II + III desde Q, con otros robots en el pasillo)
+
+Al llegar a P Base en la fase II: gira a +X, se relocaliza parado con `ajuste_esquina` (X 5.332 calibrada con el robot
+sobre la cruz, foto; Y 17.15 de cinta) y vuelve a la cruz; dos veces. El tramo de X se desvía unos 7.4° de la perpendicular:
+el rumbo sale del extintor.
+
+- `RELOC_P dx=+0.226 dy=+0.577 dth=-11.95` y luego `dx=-0.023 dy=-0.018 dth=+0.41`. Acabó bien en la cruz (visto por Marc).
+  Rozó los límites: subidos a 0.80 m y 15°.
+- Fase III: `SIN_CAMINO` en el primer lado, `FASE3_OTRO_LADO` y tres `FASE3_MEDIDA_FALLIDA sin_patas`: `FASE_III_ABANDONADA`,
+  sin entrar. Distancias entre lo visto: 0.39, 0.41 y 0.61 (esperado 0.44 y 0.62). Con tolerancia de 5 cm saldría un centro con
+  un objeto que no encaja con las patas de la fase II: no se afloja. Causa sin confirmar.
+
+La corrección de rumbo no validada queda fuera del código: `rumbo_paredes_no_validado.patch`.
