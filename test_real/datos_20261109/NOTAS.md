@@ -90,3 +90,21 @@ el rumbo sale del extintor.
   un objeto que no encaja con las patas de la fase II: no se afloja. Causa sin confirmar.
 
 La corrección de rumbo no validada queda fuera del código: `rumbo_paredes_no_validado.patch`.
+
+## Segunda prueba con la relocalización en P Base (16:11, II + III desde Q)
+
+`mission_log_bot11_fases23_reloc_P_2.csv`, `bag_bot11_fases23_reloc_P_2_20261109_161124.tar.zst`. `RELOC_P dx=+0.166 dy=+0.386
+dth=-8.10` y luego `+0.017 -0.011 +0.18`. Fase III: tres `sin_patas` desde (1.53, 14.90) y `FASE_III_ABANDONADA`, sin entrar.
+
+Hipótesis descartada: que la estación guardada se quedara en el sistema antiguo tras la relocalización. Las patas vistas de
+cerca están a 9-19 cm de las de la fase II, y a 22-67 cm si se les aplica la corrección. Causa sin averiguar.
+
+## Misión final de la entrega (16:22, BOT 11, fases I + II + III desde A)
+
+`mission_log_bot11_mision_final.csv`, `bag_bot11_mision_final_20261109_162122.tar.zst`, `mapa_final.*` (guardado al salir
+`FASE II COMPLETADA`). Con vídeo y con la relocalización en P Base **apagada** (`-p reloc_pbase_times:=0`; `real.yaml` la deja
+en 2), porque sin ella la fase III ya había entrado (15:33) y con ella había abandonado dos veces.
+
+- `FASE I COMPLETADA` a 171 s, `FASE II COMPLETADA` a 366 s, `FASE III COMPLETADA patas=3` a 429 s, sin tocar patas (Marc).
+- Aparcado a 3.2 cm del centro medido, por eso `APARCADO_FUERA_DE_TOLERANCIA` (umbral propio de 3 cm).
+- Estaciones: cuadrada en (2.03, 14.62), triangular en (5.38, 16.30). P Base: error en X sin medir en esta misión.
