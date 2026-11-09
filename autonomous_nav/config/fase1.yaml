@@ -180,7 +180,19 @@ fase1_node:
     reloc_q_min_points: 15       # puntos de pared mínimos por pared
     reloc_q_max_corr: 0.40       # m: corrección máxima en X y en Y; con más, no se corrige (RELOC_Q_RECHAZADA grande)
     reloc_q_max_angle_deg: 12.0  # grados: rumbo máximo
-    reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dos paredes
+    # Relocalización en P Base (fase II), parado y mirando a +X, con ajuste_esquina. 0 veces = apagada (el robot real
+    # la enciende en real.yaml, con las paredes calibradas)
+    reloc_pbase_times: 0
+    reloc_pbase_wall_x: 5.18     # m: tramo perpendicular a X del lado de la sala
+    reloc_pbase_wall_y: 16.90    # m: pared del extintor
+    reloc_pbase_band: 0.50       # m: el error al llegar puede ser grande
+    reloc_pbase_span: 2.8        # m: el tramo de X queda a unos 2.5 m de lado
+    reloc_pbase_max_rms: 0.04    # m
+    reloc_pbase_min_points: 6    # puntos mínimos por pared (del tramo de X salen unos 8)
+    reloc_pbase_max_corr: 0.80   # m: con más, no se corrige
+    reloc_pbase_max_angle_deg: 15.0
+    reloc_pbase_max_angle_diff_deg: 10.0  # el tramo de X se desvía unos 7.4° de la perpendicular (medido): el rumbo sale del extintor
+    reloc_q_max_angle_diff_deg: 5.0   # grados: diferencia máxima entre el rumbo de las dosparedes
 
     # ---------- Corrección continua con el mapa de distancias (ajuste_mapa) ----------
     map_corr_mode: "apagado"     # "apagado", "sombra" (solo registra) o "activo". El robot real lo fija en real.yaml

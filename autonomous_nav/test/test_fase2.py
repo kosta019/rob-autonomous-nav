@@ -84,6 +84,7 @@ def nodo_cobertura(estaciones):
     n.objetivos = [('P2_e', 8.80, 15.55, 0.10), ('final', 3.34, 15.70, 0.05)]
     n.i_objetivo, n.pose_final, n.anclas, n.obligatorios = 0, [3.34, 15.70, 0.0], ['P2_e'], ['P1_e']
     n.sustitutos, n.reloc_q_en, n.reloc_antes_de = {}, '', 'Door'
+    n.reloc_p_hechas, n.reloc_p_veces = 0, 0
     n.estaciones, n.estacion_confirmar = estaciones, 5
     n.fase2b_activa, n.fase2b_nombres = True, ['S1_e', 'S1_o']
     n.fase2b_x, n.fase2b_y = [8.80, 0.10], [14.65, 14.65]
@@ -117,6 +118,25 @@ def test_con_estacion_va_a_p_base_y_mira_hacia_ella():
     assert n.estado == 'ORIENTAR'
     assert n.pose_final[2] == pytest.approx(math.atan2(16.51 - 15.70, 7.17 - 3.34))
     assert log[-1][1].startswith('THETA_HACIA_ESTACION +11.9')     # atan2(0.81, 3.83)
+
+
+def test_en_p_base_se_relocaliza_mirando_a_x_y_luego_acaba():
+    # Con reloc_pbase_times = 1: al llegar gira a +X, se relocaliza parado y, a la vuelta, ya sigue como siempre
+    n, log = nodo_cobertura([{'tipo': 'cuadrada', 'x': 7.17, 'y': 16.51, 'vistas': 7}])
+    n.reloc_p_veces, n.reloc_n = 1, 10
+    n.reloc_tipo, n.reloc_scans_lista = '', []
+    n.empezar_reloc = lambda tipo: Fase1Node.empezar_reloc(n, tipo)
+    n.objetivos, n.i_objetivo, n.estado = [('final', 3.34, 15.70, 0.05)], 0, 'AVANZAR'
+    Fase1Node.maquina_estados(n, 3.34, 15.70, math.pi)      # llega a P Base
+    assert (n.estado, n.reloc_p_hechas, n.i_objetivo) == ('ORIENTAR_P', 1, 0)
+    assert log[-1][1] == 'LLEGADA_RELOC_P 1'
+    _, w = Fase1Node.maquina_estados(n, 3.34, 15.70, 1.0)   # todavía girado: gira hacia rumbo 0
+    assert w < 0.0 and n.estado == 'ORIENTAR_P'
+    Fase1Node.maquina_estados(n, 3.34, 15.70, 0.0)          # ya mira a +X: relocaliza
+    assert (n.estado, n.reloc_tipo) == ('RELOC', 'P')
+    n.estado = 'AVANZAR'                                    # tras la relocalización vuelve a P Base
+    Fase1Node.maquina_estados(n, 3.34, 15.70, 0.0)
+    assert n.estado == 'ORIENTAR' and n.i_objetivo == 1
 
 
 def test_estacion_sin_confirmar_no_cuenta():

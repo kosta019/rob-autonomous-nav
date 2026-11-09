@@ -425,6 +425,18 @@ class Fase1Node(Node):
         self.reloc_q_max_corr = self.declare_parameter('reloc_q_max_corr', D).value
         self.reloc_q_max_ang = math.radians(self.declare_parameter('reloc_q_max_angle_deg', D).value)
         self.reloc_q_max_dif = math.radians(self.declare_parameter('reloc_q_max_angle_diff_deg', D).value)
+        # Relocalización en P Base al acabar la fase II, parado y mirando a +X (igual que al calibrarla)
+        self.reloc_p_veces = self.declare_parameter('reloc_pbase_times', Parameter.Type.INTEGER).value   # 0 = apagada
+        self.reloc_p_pared_x = self.declare_parameter('reloc_pbase_wall_x', D).value
+        self.reloc_p_pared_y = self.declare_parameter('reloc_pbase_wall_y', D).value
+        self.reloc_p_banda = self.declare_parameter('reloc_pbase_band', D).value
+        self.reloc_p_alcance = self.declare_parameter('reloc_pbase_span', D).value
+        self.reloc_p_max_rms = self.declare_parameter('reloc_pbase_max_rms', D).value
+        self.reloc_p_min_puntos = self.declare_parameter('reloc_pbase_min_points', Parameter.Type.INTEGER).value
+        self.reloc_p_max_corr = self.declare_parameter('reloc_pbase_max_corr', D).value
+        self.reloc_p_max_ang = math.radians(self.declare_parameter('reloc_pbase_max_angle_deg', D).value)
+        self.reloc_p_max_dif = math.radians(self.declare_parameter('reloc_pbase_max_angle_diff_deg', D).value)
+        self.reloc_p_hechas = 0
         # Corrección continua con el mapa de distancias. Modo: "apagado", "sombra" (solo registra) o "activo"
         self.corr_modo = self.declare_parameter('map_corr_mode', Parameter.Type.STRING).value
         self.corr_cada = self.declare_parameter('map_corr_every_scans', Parameter.Type.INTEGER).value
@@ -1401,6 +1413,9 @@ class Fase1Node(Node):
         if self.reloc_tipo == 'Q':
             self.relocalizar_q(r, a, x, y, th)
             return
+        if self.reloc_tipo == 'P':
+            self.relocalizar_q(r, a, x, y, th, 'RELOC_P', self.ajustar_esquina_p)
+            return
         dx, dy, dth, nivel, motivo, d = self.ajustar_puerta(r, a, x, y, th)
         if nivel == 'total':
             self.reloc_puerta_total = True
@@ -1437,29 +1452,43 @@ class Fase1Node(Node):
             self.escribir_log(nx, ny, nth, f'RELOC_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
         self.estado = 'GIRAR'
 
-    def relocalizar_q(self, r, a, x, y, th):
-        # Relocalización con la esquina de Q (ajuste_esquina): x, y y rumbo, o nada. Después el robot vuelve a Q.
+    def relocalizar_q(self, r, a, x, y, th, etiqueta='RELOC_Q', ajustar=None):
+        # Relocalización con dos paredes (ajuste_esquina): x, y y rumbo, o nada. Después el robot vuelve al punto.
+        # Por defecto, la esquina de Q; con etiqueta y ajustar, las paredes de P Base.
+        ajustar = ajustar or self.ajustar_esquina
+
         def texto_de(dx, dy, dth, d):
             return (f"dx={dx:+.3f} dy={dy:+.3f} dth={math.degrees(dth):+.2f} nx={d['nx']} ny={d['ny']}"
                     + (f" dth_x={math.degrees(d['dth_x']):+.2f} dth_y={math.degrees(d['dth_y']):+.2f}"
                        if d['dth_x'] is not None else ''))
-        dx, dy, dth, motivo, d = self.ajustar_esquina(r, a, x, y, th)
+        dx, dy, dth, motivo, d = ajustar(r, a, x, y, th)
         self.estado = 'GIRAR'
         if motivo:
-            self.get_logger().warn(f'Relocalización en Q rechazada: {motivo} {texto_de(dx, dy, dth, d)}')
-            self.escribir_log(x, y, th, f'RELOC_Q_RECHAZADA {motivo} {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
+            self.get_logger().warn(f'{etiqueta} rechazada: {motivo} {texto_de(dx, dy, dth, d)}')
+            self.escribir_log(x, y, th, f'{etiqueta}_RECHAZADA {motivo} {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
             return
         nx, ny, nth = x + dx, y + dy, normalizar(th + dth)
-        self.get_logger().info(f'Relocalización en Q: {texto_de(dx, dy, dth, d)}')
-        self.escribir_log(nx, ny, nth, f'RELOC_Q {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
+        self.get_logger().info(f'{etiqueta}: {texto_de(dx, dy, dth, d)}')
+        self.escribir_log(nx, ny, nth, f'{etiqueta} {texto_de(dx, dy, dth, d)}', math.hypot(dx, dy))
         self.fijar_pose(nx, ny, nth)
         self.obstaculos = {}
-        dx2, dy2, dth2, motivo2, d2 = self.ajustar_esquina(r, a, nx, ny, nth)
+        dx2, dy2, dth2, motivo2, d2 = ajustar(r, a, nx, ny, nth)
         if (motivo2 or abs(dx2) > self.reloc_comprobar_dist or abs(dy2) > self.reloc_comprobar_dist
                 or abs(dth2) > self.reloc_comprobar_ang):
             texto = f'{motivo2 or "ok"} {texto_de(dx2, dy2, dth2, d2)}'
-            self.get_logger().warn(f'Relocalización en Q inconsistente al repetir: {texto}')
-            self.escribir_log(nx, ny, nth, f'RELOC_Q_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
+            self.get_logger().warn(f'{etiqueta} inconsistente al repetir: {texto}')
+            self.escribir_log(nx, ny, nth, f'{etiqueta}_INCONSISTENTE {texto}', math.hypot(dx2, dy2))
+
+    def ajustar_esquina_p(self, r, a, x, y, th):
+        # Como ajustar_esquina, con las paredes de P Base: el tramo perpendicular a X del lado de la sala y el extintor
+        lx = x + self.lidar_offset_x * math.cos(th)
+        ly = y + self.lidar_offset_x * math.sin(th)
+        ok = ~np.isnan(r)
+        px = lx + r[ok] * np.cos(th + self.lidar_yaw_offset + a[ok])
+        py = ly + r[ok] * np.sin(th + self.lidar_yaw_offset + a[ok])
+        return ajuste_esquina(px, py, x, y, self.reloc_p_pared_x, self.reloc_p_pared_y, self.reloc_p_banda,
+                              self.reloc_p_alcance, self.reloc_p_max_rms, self.reloc_p_min_puntos,
+                              self.reloc_p_max_corr, self.reloc_p_max_ang, self.reloc_p_max_dif, 'Y')
 
     def ajustar_esquina(self, r, a, x, y, th):
         lx = x + self.lidar_offset_x * math.cos(th)
@@ -1600,6 +1629,15 @@ class Fase1Node(Node):
                     self.empezar_fase3(x, y, th)
             return 0.0, 0.0
 
+        if self.estado == 'ORIENTAR_P':
+            # En P Base: gira a mirar a +X y se relocaliza parado, igual que cuando se calibraron las paredes
+            error = normalizar(0.0 - th)
+            if abs(error) < self.tol_final_yaw:
+                self.get_logger().info(f'Relocalizo en P Base: junto {self.reloc_n} scans parado')
+                self.empezar_reloc('P')
+                return 0.0, 0.0
+            return 0.0, limitar(self.k_angular * error, self.max_w)
+
         if self.estado == 'ORIENTAR':
             error = normalizar(self.pose_final[2] - th)
             if abs(error) < self.tol_final_yaw and self.fase == 'III':
@@ -1632,6 +1670,12 @@ class Fase1Node(Node):
                                    f'junto {self.reloc_n} scans parado')
             self.escribir_log(x, y, th, f'LLEGADA_RELOC_Q {self.reloc_q_hechas}', dist)
             self.empezar_reloc('Q')
+            return 0.0, 0.0
+        if dist < tol and self.fase == 'II' and nombre == 'final' and self.reloc_p_hechas < self.reloc_p_veces:
+            # En P Base, lo mismo que en Q: se relocaliza antes de darlo por alcanzado y luego vuelve con la pose nueva
+            self.reloc_p_hechas += 1
+            self.escribir_log(x, y, th, f'LLEGADA_RELOC_P {self.reloc_p_hechas}', dist)
+            self.estado = 'ORIENTAR_P'
             return 0.0, 0.0
         if dist < tol:
             self.get_logger().info(f'Waypoint {nombre} alcanzado (error {dist:.3f} m)')
